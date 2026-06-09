@@ -11,7 +11,7 @@ interface ResolveQuerystring {
 /**
  * Agent locator resolution endpoint.
  *
- *   GET /api/v1/resolve?locator=<identifier>@<namespace>:global
+ *   GET /api/v1/resolve?locator=urn:ai:nasiko.com:ankit
  *
  * Looks up the org in the NANDA Index DB → returns IndexRecord (with registry_url)
  * plus the parsed identifier. The caller then fetches the AgentRecord directly:

@@ -329,9 +329,9 @@ export default function NewOrgPage() {
                   Locator preview
                 </p>
                 <p className="mt-1 font-mono text-sm text-slate-700">
-                  <span className="text-slate-400">agent@</span>
+                  <span className="text-slate-400">urn:ai:</span>
                   <span className="text-slate-950">{form.domain}</span>
-                  <span className="text-slate-400">:global</span>
+                  <span className="text-slate-400">:&lt;agent&gt;</span>
                 </p>
               </div>
             )}

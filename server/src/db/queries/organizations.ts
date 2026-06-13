@@ -11,6 +11,7 @@ export interface Organization {
   registryUrl: string;
   emailVerified: boolean;
   verifyToken: string | null;
+  verifyTokenExpiresAt: Date | null;
   ttlSeconds: number;
   status: 'pending' | 'active' | 'suspended';
   createdAt: Date;
@@ -24,6 +25,7 @@ export interface InsertOrgParams {
   contactEmail: string;
   registryUrl: string;
   verifyToken: string;
+  verifyTokenExpiresAt: Date;
   ttlSeconds?: number;
 }
 
@@ -106,10 +108,12 @@ export async function insertOrganization(params: InsertOrgParams): Promise<Organ
   const sql = getSql();
   const rows = await sql<Organization[]>`
     INSERT INTO organizations
-      (org_id, display_name, domain, contact_email, registry_url, verify_token, ttl_seconds)
+      (org_id, display_name, domain, contact_email, registry_url,
+       verify_token, verify_token_expires_at, ttl_seconds)
     VALUES
       (${params.orgId}, ${params.displayName}, ${params.domain}, ${params.contactEmail},
-       ${params.registryUrl}, ${params.verifyToken}, ${params.ttlSeconds ?? 86400})
+       ${params.registryUrl}, ${params.verifyToken}, ${params.verifyTokenExpiresAt},
+       ${params.ttlSeconds ?? 86400})
     RETURNING *
   `;
   return rows[0]!;
@@ -146,11 +150,13 @@ export async function activateByVerifyToken(token: string): Promise<Organization
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      email_verified = TRUE,
-      verify_token   = NULL,
-      status         = 'active',
-      updated_at     = NOW()
+      email_verified           = TRUE,
+      verify_token             = NULL,
+      verify_token_expires_at  = NULL,
+      status                   = 'active',
+      updated_at               = NOW()
     WHERE verify_token = ${token}
+      AND verify_token_expires_at > NOW()
     RETURNING *
   `;
   return rows[0] ?? null;

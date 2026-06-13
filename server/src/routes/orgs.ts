@@ -68,15 +68,17 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     const verifyToken = randomBytes(32).toString('hex');
+    const verifyTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const org = await insertOrganization({
-      orgId:        body.org_id,
-      displayName:  body.display_name,
-      domain:       body.domain,
-      contactEmail: body.contact_email,
-      registryUrl:  body.registry_url,
+      orgId:                body.org_id,
+      displayName:          body.display_name,
+      domain:               body.domain,
+      contactEmail:         body.contact_email,
+      registryUrl:          body.registry_url,
       verifyToken,
-      ttlSeconds:   body.ttl_seconds,
+      verifyTokenExpiresAt,
+      ttlSeconds:           body.ttl_seconds,
     });
 
     await insertMembership(user.userId, org.orgId, 'admin');

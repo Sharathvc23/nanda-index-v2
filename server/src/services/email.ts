@@ -1,14 +1,6 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { buildConfig } from '../config/index.js';
 
-/**
- * Sends an email verification link to the org's contact address.
- * When SMTP_URL='log' (default in dev), prints the link to console instead of sending.
- *
- * @param to - recipient email address
- * @param token - 32-byte hex verify token stored on the organization row
- * @param orgId - org slug, included in the email body for context
- */
 export async function sendVerificationEmail(
   to: string,
   token: string,
@@ -22,8 +14,8 @@ export async function sendVerificationEmail(
     return;
   }
 
-  const transport = nodemailer.createTransport(config.email.smtpUrl);
-  await transport.sendMail({
+  const resend = new Resend(config.email.smtpUrl);
+  await resend.emails.send({
     from:    config.email.fromAddress,
     to,
     subject: `Verify your NANDA Index registration for ${orgId}`,

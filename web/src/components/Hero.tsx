@@ -14,7 +14,7 @@ export function Hero() {
           <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600">
             NandaIndex is a global switchboard that connects discovery islands across
             enterprises, SMBs, and individuals. It uses the AI Catalog format as its
-            native record format and maps any identity — domain, email, or URN — to the
+            native record format and maps any identity (domain, email, or URN) to the
             correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, MCP
             descriptor, gateway, or personal agent card.
           </p>

@@ -437,7 +437,8 @@ export default function NewOrgPage() {
       const record = await createOrg({
         org_id:           form.org_id,
         display_name:     form.display_name,
-        domain:           isPersonal ? null : (form.domain || null),
+        hosting_path:     form.hosting_path,
+        domain:           isPersonal ? undefined : (form.domain || undefined),
         contact_email:    form.contact_email,
         registry_url:     isDnsAid ? null : (form.registry_url || null),
         ttl_seconds:      parseInt(form.ttl_seconds, 10) || 86400,

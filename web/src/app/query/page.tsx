@@ -86,6 +86,7 @@ export default function QueryPage() {
             agent = await fetchAgentRecord(
               indexData.index_record.registry_url,
               indexData.identifier,
+              indexData.index_record.media_type,
             );
           } catch (err) {
             agentError = err instanceof ApiError

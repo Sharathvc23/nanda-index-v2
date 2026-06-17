@@ -74,9 +74,12 @@ export interface SearchResponse {
   results: IndexRecord[];
 }
 
+export type HostingPath = "registry" | "dns-aid" | "smb" | "personal";
+
 export interface CreateOrgPayload {
   org_id: string;
   display_name: string;
+  hosting_path?: HostingPath;
   domain?: string | null;
   contact_email: string;
   registry_url?: string | null;

@@ -8,9 +8,12 @@ import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { PublisherBlock } from '../types/api/index-record.js';
 
+type HostingPath = 'registry' | 'dns-aid' | 'smb' | 'personal';
+
 interface CreateOrgBody {
   org_id: string;
   display_name: string;
+  hosting_path?: HostingPath;
   domain?: string | null;
   contact_email: string;
   registry_url?: string | null;
@@ -58,7 +61,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         properties: {
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
-          domain:        { type: 'string', minLength: 3, maxLength: 255 },
+          hosting_path:  { type: 'string', enum: ['registry', 'dns-aid', 'smb', 'personal'] },
+          domain:        { type: 'string', pattern: '^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
           registry_url:  { type: 'string', pattern: '^https?://', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
@@ -89,6 +93,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   }, async (request, reply) => {
     const user = request.user as JwtPayload;
     const body = request.body;
+
+    // Personal agents don't need a domain; all other paths require one
+    if (body.hosting_path !== 'personal' && !body.domain) {
+      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain is required for registry, dns-aid, and smb registrations' });
+    }
 
     // Check for duplicate org_id
     const existing = await findByOrgId(body.org_id);
@@ -169,7 +178,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         type: 'object',
         properties: {
           display_name:     { type: 'string', minLength: 1, maxLength: 255 },
-          domain:           { type: 'string', minLength: 3, maxLength: 255 },
+          domain:           { type: 'string', maxLength: 255 },
           registry_url:     { type: 'string', pattern: '^https?://', maxLength: 512 },
           ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
           description:      { type: 'string', maxLength: 1000 },

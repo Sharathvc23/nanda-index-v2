@@ -102,6 +102,18 @@ export async function findByDomain(domain: string): Promise<Organization | null>
 }
 
 /**
+ * Finds an organization by its stored identifier URN.
+ * Used for email-identity lookups (e.g. urn:ai:email:john@example.com).
+ */
+export async function findByIdentifier(identifier: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations WHERE identifier = ${identifier} LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/**
  * Returns all organizations a user is a member of.
  */
 export async function findByUserId(userId: string): Promise<Organization[]> {
@@ -225,9 +237,10 @@ export async function searchOrganizations(query: string): Promise<Organization[]
     SELECT * FROM organizations
     WHERE status = 'active'
       AND (
-        LOWER(org_id)       LIKE ${pattern}
-        OR LOWER(domain)       LIKE ${pattern}
-        OR LOWER(display_name) LIKE ${pattern}
+        LOWER(org_id)        LIKE ${pattern}
+        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern}
+        OR LOWER(display_name)              LIKE ${pattern}
+        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern}
       )
     ORDER BY org_id ASC
     LIMIT 50

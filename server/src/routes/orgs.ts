@@ -91,13 +91,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
           org_id:        { type: 'string', pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$', minLength: 2, maxLength: 64 },
           display_name:  { type: 'string', minLength: 1, maxLength: 255 },
           hosting_path:  { type: 'string', enum: ['registry', 'dns-aid', 'smb', 'personal'] },
-          domain:        { type: 'string', pattern: '^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$', maxLength: 255 },
+          domain:        { type: 'string', maxLength: 255 },
           contact_email: { type: 'string', format: 'email' },
-          registry_url:  { type: 'string', pattern: '^https?://', maxLength: 512 },
+          registry_url:  { type: 'string', maxLength: 512 },
           ttl_seconds:   { type: 'integer', minimum: 3600, maximum: 604800 },
           identifier:    { type: 'string', maxLength: 512 },
           media_type:    { type: 'string', maxLength: 128,
-                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json'] },
+                           enum: ['application/ai-catalog+json', 'application/vnd.dns-aid+json', 'application/a2a-agent-card+json', 'application/mcp-server-card+json', 'application/agentskill+zip'] },
           description:   { type: 'string', maxLength: 1000 },
           tags:          { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },
           publisher: {
@@ -123,9 +123,26 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const user = request.user as JwtPayload;
     const body = request.body;
 
-    // Personal agents don't need a domain; all other paths require one
-    if (body.hosting_path !== 'personal' && !body.domain) {
+    const path = body.hosting_path ?? 'registry';
+    const isDnsAid = path === 'dns-aid';
+    const isPersonal = path === 'personal';
+
+    // Domain: required for all paths except personal
+    if (!isPersonal && !body.domain) {
       return reply.code(400).send({ error: 'VALIDATION', detail: 'domain is required for registry, dns-aid, and smb registrations' });
+    }
+    if (body.domain && !/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(body.domain)) {
+      return reply.code(400).send({ error: 'VALIDATION', detail: 'domain must be a valid hostname (e.g. acme.com)' });
+    }
+
+    // registry_url: required for registry, smb, personal — not for dns-aid
+    if (!isDnsAid) {
+      if (!body.registry_url) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url is required for registry, smb, and personal registrations' });
+      }
+      if (!/^https?:\/\//.test(body.registry_url)) {
+        return reply.code(400).send({ error: 'VALIDATION', detail: 'registry_url must start with https://' });
+      }
     }
 
     // Check for duplicate org_id
@@ -203,7 +220,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         properties: {
           display_name:     { type: 'string', minLength: 1, maxLength: 255 },
           domain:           { type: 'string', maxLength: 255 },
-          registry_url:     { type: 'string', pattern: '^https?://', maxLength: 512 },
+          registry_url:     { type: 'string', maxLength: 512 },
           ttl_seconds:      { type: 'integer', minimum: 3600, maximum: 604800 },
           description:      { type: 'string', maxLength: 1000 },
           tags:             { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 },

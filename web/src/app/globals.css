@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  /* ===== OUTSHIFT TOKENS (canonical names — match ai-catalog.outshift.io) ===== */
+  /* ===== OUTSHIFT TOKENS (canonical names - match ai-catalog.outshift.io) ===== */
 
-  /* Surfaces — all four matter */
+  /* Surfaces - all four matter */
   --color-surface:        #f5f8fd; /* page bg */
   --color-surface-light:  #fbfcfe; /* cards, header bg, secondary buttons */
   --color-surface-strong: #eff3fc; /* filter sidebar, subtle hover bg */
   --color-surface-tag:    #e3eafa; /* tag/chip pill bg */
 
-  /* Ink (text) — 4 levels */
+  /* Ink (text) - 4 levels */
   --color-ink:        #3c4551; /* body / default */
   --color-ink-strong: #00142b; /* headings */
   --color-ink-medium: #59616b; /* nav links default */
   --color-ink-weak:   #777d85; /* placeholders, eyebrow labels */
 
-  /* Lines (borders) — 2 levels */
+  /* Lines (borders) - 2 levels */
   --color-line:        #d5dff7; /* default border */
   --color-line-strong: #c8d5f5; /* hover border */
 
@@ -50,7 +50,7 @@
   --font-weight-semibold: 600;
   --font-weight-bold:     700;
 
-  /* Radii — only two matter */
+  /* Radii - only two matter */
   --radius-card:    8px;
   --radius-control: 4px;
   --radius-sm:      4px;
@@ -72,7 +72,7 @@
   --leading-relaxed: 1.625;
   --tracking-wide:   0.025em;
 
-  /* ===== ALIASES — keep old names so unswept components don't break ===== */
+  /* ===== ALIASES - keep old names so unswept components don't break ===== */
   --color-bg:                 var(--color-surface);
   --color-bg-light:           var(--color-surface-light);
   --color-surface-2:          var(--color-surface-strong);
@@ -187,7 +187,7 @@
   --radius-xl:      var(--radius-xl);
   --radius-full:    var(--radius-full);
 
-  /* Shadows — outshift wires these via @theme so utilities resolve */
+  /* Shadows - outshift wires these via @theme so utilities resolve */
   --shadow-card:       0 4px 4px 0 rgba(200, 213, 245, 0.33);
   --shadow-card-hover: 0 6px 16px 0 rgba(200, 213, 245, 0.55);
   --shadow-sm:    var(--shadow-sm);

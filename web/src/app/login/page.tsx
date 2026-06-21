@@ -159,7 +159,7 @@ function LoginPageInner() {
           </form>
         </div>
 
-        {/* OAuth buttons — only shown when provider is configured on the server */}
+        {/* OAuth buttons - only shown when provider is configured on the server */}
         {providers && (providers.google || providers.github) && (
           <>
             <div className="flex items-center gap-3 text-xs text-ink-weak">

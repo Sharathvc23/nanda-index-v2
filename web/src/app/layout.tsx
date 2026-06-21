@@ -12,12 +12,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "NANDA Index — Federated Agent Discovery",
+  title: "NANDA Index - Federated Agent Discovery",
   description:
     "A DNS-inspired trust framework for cross-organization AI agent discovery.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://nandaindex.org"),
   openGraph: {
-    title: "NANDA Index — Federated Agent Discovery",
+    title: "NANDA Index - Federated Agent Discovery",
     description:
       "A DNS-inspired trust framework for cross-organization AI agent discovery.",
     type: "website",

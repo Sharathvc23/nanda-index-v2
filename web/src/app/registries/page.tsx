@@ -128,7 +128,7 @@ export default function RegistriesPage() {
                         <StatusBadge status={item.status} />
                       </td>
                       <td className="px-4 py-3 align-top text-sm text-ink-medium">
-                        {item.email_verified ? "✓" : "—"}
+                        {item.email_verified ? "✓" : "-"}
                       </td>
                     </tr>
                   );
@@ -171,7 +171,7 @@ export default function RegistriesPage() {
                           {selected.registry_url}
                         </a>
                       ) : (
-                        <span className="text-ink-weak">—</span>
+                        <span className="text-ink-weak">-</span>
                       )}
                     </div>
                     <div>

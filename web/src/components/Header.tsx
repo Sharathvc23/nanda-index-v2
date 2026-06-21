@@ -41,8 +41,7 @@ export function Header() {
 
   return (
     <header className="bg-surface-light border-b border-line sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[60px] items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
           {/* LEFT: brand */}
           <Link
             href="/"
@@ -58,7 +57,7 @@ export function Header() {
             </span>
           </Link>
 
-          {/* RIGHT: nav + auth */}
+          {/* RIGHT: nav + counter + auth */}
           <div className="flex items-center gap-6">
             <nav className="hidden items-center gap-6 lg:flex">
               {publicNav.map((item) => (
@@ -71,6 +70,11 @@ export function Header() {
                 </Link>
               ))}
             </nav>
+
+            <div className="hidden md:flex flex-col items-end leading-tight">
+              <span className="text-base font-bold text-ink-strong">12 + registries indexed</span>
+              <span className="text-xs text-ink-weak">Indexed</span>
+            </div>
 
             <div className="hidden lg:block">
               {displayName ? (
@@ -128,7 +132,6 @@ export function Header() {
               </div>
             </details>
           </div>
-        </div>
       </div>
     </header>
   );

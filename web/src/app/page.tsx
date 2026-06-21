@@ -1,204 +1,101 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listIndexRecords } from "@/lib/nanda-api";
+import type { IndexRecord } from "@/lib/nanda-types";
 
 type Registry = {
   id: string;
   name: string;
-  type: "Enterprise" | "SMB" | "DNS-AID" | "Personal" | "Custom";
+  type: string;
   version: string;
   date: string;
   identifier: string;
   description: string;
   tags: string[];
   verified: boolean;
-  status: "Active" | "Pending" | "Suspended";
+  status: string;
   typeBadge: string;
 };
 
-const SEED_REGISTRYS: Registry[] = [
-  {
-    id: "travel26",
-    name: "travel26",
-    type: "Enterprise",
-    version: "Enterprise",
-    date: "6/20/2026",
-    identifier: "urn:ai:domain:travel26.net",
-    description: "urn:ai:domain:travel26.net - 31 agents indexed via AI Catalog. Travel + booking enterprise registry.",
-    tags: ["travel", "enterprise", "booking"],
-    verified: true,
-    status: "Active",
-    typeBadge: "ENTERPRISE",
-  },
-  {
-    id: "agntcy",
-    name: "agntcy",
-    type: "Enterprise",
-    version: "Enterprise",
-    date: "6/18/2026",
-    identifier: "urn:ai:org.agntcy",
-    description: "https://ai-catalog.outshift.io - Cisco's AGNTCY AI catalog, enterprise discovery surface.",
-    tags: ["enterprise", "catalog", "cisco"],
-    verified: true,
-    status: "Active",
-    typeBadge: "ENTERPRISE",
-  },
-  {
-    id: "moon-bakery",
-    name: "moon-bakery",
-    type: "SMB",
-    version: "SMB",
-    date: "6/15/2026",
-    identifier: "urn:ai:domain:moonbakery.com:agent:orders",
-    description: "urn:ai:domain:moonbakery.com:agent:orders - neighborhood bakery orders agent registered via NANDA.",
-    tags: ["smb", "food", "orders"],
-    verified: false,
-    status: "Active",
-    typeBadge: "SMB",
-  },
-  {
-    id: "sunrise-tours",
-    name: "sunrise-tours",
-    type: "SMB",
-    version: "SMB",
-    date: "6/14/2026",
-    identifier: "urn:ai:domain:sunrisetours.com:agent:booking",
-    description: "urn:ai:domain:sunrisetours.com:agent:booking - small-business tour booking agent.",
-    tags: ["smb", "travel", "tours"],
-    verified: false,
-    status: "Active",
-    typeBadge: "SMB",
-  },
-  {
-    id: "brew-lab",
-    name: "brew-lab",
-    type: "SMB",
-    version: "SMB",
-    date: "6/12/2026",
-    identifier: "urn:ai:domain:brewlab.coffee:agent:orders",
-    description: "urn:ai:domain:brewlab.coffee:agent:orders - specialty coffee shop orders agent.",
-    tags: ["smb", "food", "coffee"],
-    verified: false,
-    status: "Active",
-    typeBadge: "SMB",
-  },
-  {
-    id: "fitzone",
-    name: "fitzone",
-    type: "SMB",
-    version: "SMB",
-    date: "6/10/2026",
-    identifier: "urn:ai:domain:fitzone.fit:agent:memberships",
-    description: "urn:ai:domain:fitzone.fit:agent:memberships - gym memberships and scheduling agent.",
-    tags: ["smb", "fitness", "memberships"],
-    verified: false,
-    status: "Pending",
-    typeBadge: "SMB",
-  },
-  {
-    id: "travel26-flights",
-    name: "travel26-flights",
-    type: "DNS-AID",
-    version: "DNS-AID",
-    date: "6/9/2026",
-    identifier: "urn:ai:domain:flights.travel26.net",
-    description: "urn:ai:domain:flights.travel26.net - DNS-AID record pointing to the flights subdomain agent.",
-    tags: ["dns-aid", "travel", "flights"],
-    verified: true,
-    status: "Active",
-    typeBadge: "DNS-AID",
-  },
-  {
-    id: "medicore-health",
-    name: "medicore-health",
-    type: "DNS-AID",
-    version: "DNS-AID",
-    date: "6/7/2026",
-    identifier: "urn:ai:domain:medicore.health",
-    description: "urn:ai:domain:medicore.health - health-domain DNS-AID record for clinical agents.",
-    tags: ["dns-aid", "health", "medical"],
-    verified: false,
-    status: "Active",
-    typeBadge: "DNS-AID",
-  },
-  {
-    id: "priya-personal",
-    name: "priya-personal",
-    type: "Personal",
-    version: "Personal",
-    date: "6/6/2026",
-    identifier: "urn:ai:email:priya@gmail.com",
-    description: "urn:ai:email:priya@gmail.com - individual identity with delegated agent card hosting.",
-    tags: ["personal", "individual"],
-    verified: true,
-    status: "Active",
-    typeBadge: "PERSONAL",
-  },
-  {
-    id: "ankit-dev",
-    name: "ankit-dev",
-    type: "Personal",
-    version: "Personal",
-    date: "6/4/2026",
-    identifier: "urn:ai:email:ankit@nasiko.com",
-    description: "urn:ai:email:ankit@nasiko.com - developer's personal identity with a dev agent card.",
-    tags: ["personal", "dev"],
-    verified: false,
-    status: "Active",
-    typeBadge: "PERSONAL",
-  },
-  {
-    id: "sara-design",
-    name: "sara-design",
-    type: "Personal",
-    version: "Personal",
-    date: "6/2/2026",
-    identifier: "urn:ai:email:sara@outlook.com",
-    description: "urn:ai:email:sara@outlook.com - design portfolio agent for an individual creator.",
-    tags: ["personal", "design"],
-    verified: false,
-    status: "Pending",
-    typeBadge: "PERSONAL",
-  },
-  {
-    id: "nasiko-org",
-    name: "nasiko-org",
-    type: "Enterprise",
-    version: "Enterprise",
-    date: "5/30/2026",
-    identifier: "urn:ai:domain:nasiko.com",
-    description: "urn:ai:domain:nasiko.com - Nasiko organization registry with developer agents.",
-    tags: ["enterprise", "dev"],
-    verified: false,
-    status: "Active",
-    typeBadge: "ENTERPRISE",
-  },
-];
-
-const TYPE_OPTIONS: Registry["type"][] = ["Enterprise", "SMB", "DNS-AID", "Personal", "Custom"];
-const STATUS_OPTIONS: Registry["status"][] = ["Active", "Pending", "Suspended"];
-const TAG_OPTIONS = [
-  "enterprise",
-  "smb",
-  "dns-aid",
-  "personal",
-  "custom",
-  "travel",
-  "food",
-  "fitness",
-  "health",
-  "dev",
-  "design",
-];
-
 const PAGE_SIZE = 6;
 
+function getTypeBadge(record: IndexRecord): string {
+  const mt = record.media_type ?? "";
+  const tags = record.tags ?? [];
+  if (mt === "application/ai-catalog+json" && tags.includes("enterprise")) return "ENTERPRISE";
+  if (mt === "application/ai-catalog+json") return "CATALOG";
+  if (mt === "application/vnd.dns-aid+json") return "DNS-AID";
+  if (mt === "application/a2a-agent-card+json" && tags.includes("personal-agent")) return "PERSONAL";
+  if (mt === "application/a2a-agent-card+json" && tags.includes("smb")) return "SMB";
+  const first = tags[0];
+  return first ? first.toUpperCase() : "CUSTOM";
+}
+
+function toCapitalized(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
+
+function mapRecord(record: IndexRecord): Registry {
+  const badge = getTypeBadge(record);
+  const name = record.display_name || record.org_id;
+  const date = record.updated_at ? new Date(record.updated_at).toLocaleDateString() : "";
+  const description = record.description || record.identifier || record.domain || "";
+  const baseTags = record.tags ?? [];
+  const merged = [badge, ...baseTags];
+  const seen = new Set<string>();
+  const tags = merged.filter((t) => {
+    const key = t.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return {
+    id: record.org_id,
+    name,
+    type: badge,
+    version: badge,
+    date,
+    identifier: record.identifier ?? record.org_id,
+    description,
+    tags,
+    verified: !!record.email_verified,
+    status: toCapitalized(record.status),
+    typeBadge: badge,
+  };
+}
+
 export default function HomePage() {
+  const [records, setRecords] = useState<Registry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set());
   const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    listIndexRecords()
+      .then((data) => {
+        if (cancelled) return;
+        setRecords(data.map(mapRecord));
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function toggle(set: Set<string>, value: string, updater: (s: Set<string>) => void) {
     const next = new Set(set);
@@ -208,22 +105,57 @@ export default function HomePage() {
     setPage(1);
   }
 
+  const typeOptions = useMemo(() => {
+    const s = new Set<string>();
+    records.forEach((r) => s.add(r.type));
+    return Array.from(s).sort();
+  }, [records]);
+
+  const statusOptions = useMemo(() => {
+    const s = new Set<string>();
+    records.forEach((r) => s.add(r.status));
+    return Array.from(s).sort();
+  }, [records]);
+
+  const tagOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    records.forEach((r) => {
+      r.tags.forEach((t) => {
+        const key = t.toLowerCase();
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 30)
+      .map(([t]) => t);
+  }, [records]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return SEED_REGISTRYS.filter((r) => {
+    return records.filter((r) => {
       if (q && !r.name.toLowerCase().includes(q) && !r.identifier.toLowerCase().includes(q)) {
         return false;
       }
       if (typeFilters.size > 0 && !typeFilters.has(r.type)) return false;
       if (statusFilters.size > 0 && !statusFilters.has(r.status)) return false;
-      if (tagFilters.size > 0 && !r.tags.some((t) => tagFilters.has(t))) return false;
+      if (tagFilters.size > 0 && !r.tags.some((t) => tagFilters.has(t.toLowerCase()))) return false;
       return true;
     });
-  }, [search, typeFilters, statusFilters, tagFilters]);
+  }, [records, search, typeFilters, statusFilters, tagFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const apiHostname = (() => {
+    const url = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url || "the API";
+    }
+  })();
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -241,28 +173,59 @@ export default function HomePage() {
             setSearch(v);
             setPage(1);
           }}
+          typeOptions={typeOptions}
           typeFilters={typeFilters}
           onToggleType={(v) => toggle(typeFilters, v, setTypeFilters)}
+          statusOptions={statusOptions}
           statusFilters={statusFilters}
           onToggleStatus={(v) => toggle(statusFilters, v, setStatusFilters)}
+          tagOptions={tagOptions}
           tagFilters={tagFilters}
           onToggleTag={(v) => toggle(tagFilters, v, setTagFilters)}
         />
 
         <div className="flex-1 min-w-0">
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-            {pageItems.map((item) => (
-              <RegistryCard key={item.id} item={item} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-surface-strong h-[200px] rounded-card animate-pulse"
+                />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="bg-surface-light rounded-card border border-line/70 shadow-card p-6 max-w-md text-center">
+                <p className="text-sm text-ink-medium">
+                  Could not reach {apiHostname}. Check that the API is running.
+                </p>
+                <p className="mt-2 font-mono text-xs text-ink-weak break-all">{error}</p>
+              </div>
+            </div>
+          ) : records.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="bg-surface-light rounded-card border border-line/70 shadow-card p-6 max-w-md text-center">
+                <p className="text-sm text-ink-medium">No org/registrys registered yet.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                {pageItems.map((item) => (
+                  <RegistryCard key={item.id} item={item} />
+                ))}
+              </div>
 
-          <Pagination
-            page={currentPage}
-            total={totalPages}
-            onPrev={() => setPage((p) => Math.max(1, p - 1))}
-            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-            onGoto={(p) => setPage(p)}
-          />
+              <Pagination
+                page={currentPage}
+                total={totalPages}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onGoto={(p) => setPage(p)}
+              />
+            </>
+          )}
         </div>
       </div>
     </main>
@@ -272,10 +235,13 @@ export default function HomePage() {
 function FilterSidebar(props: {
   search: string;
   onSearchChange: (v: string) => void;
+  typeOptions: string[];
   typeFilters: Set<string>;
   onToggleType: (v: string) => void;
+  statusOptions: string[];
   statusFilters: Set<string>;
   onToggleStatus: (v: string) => void;
+  tagOptions: string[];
   tagFilters: Set<string>;
   onToggleTag: (v: string) => void;
 }) {
@@ -304,7 +270,7 @@ function FilterSidebar(props: {
             Type
           </span>
           <div className="space-y-1.5">
-            {TYPE_OPTIONS.map((opt) => (
+            {props.typeOptions.map((opt) => (
               <label key={opt} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
                 <input
                   type="checkbox"
@@ -323,7 +289,7 @@ function FilterSidebar(props: {
             Status
           </span>
           <div className="space-y-1.5">
-            {STATUS_OPTIONS.map((opt) => (
+            {props.statusOptions.map((opt) => (
               <label key={opt} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
                 <input
                   type="checkbox"
@@ -342,7 +308,7 @@ function FilterSidebar(props: {
             Tags
           </span>
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {TAG_OPTIONS.map((tag) => (
+            {props.tagOptions.map((tag) => (
               <label key={tag} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
                 <input
                   type="checkbox"

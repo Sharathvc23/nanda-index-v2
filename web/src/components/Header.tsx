@@ -72,7 +72,7 @@ export function Header() {
             </nav>
 
             <div className="hidden md:flex flex-col items-end leading-tight">
-              <span className="text-base font-bold text-ink-strong">12 + registries indexed</span>
+              <span className="text-base font-bold text-ink-strong">13 + org/registrys indexed</span>
               <span className="text-xs text-ink-weak">Indexed</span>
             </div>
 

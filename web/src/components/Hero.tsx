@@ -2,16 +2,16 @@ import { heroStats } from "@/lib/site-data";
 
 export function Hero() {
   return (
-    <section className="mx-auto max-w-7xl px-4 pb-6 pt-10 sm:px-6 lg:px-8 lg:pt-16">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 pt-10 lg:pt-16">
       <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-fg-weak)]">
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-weak">
             Nanda Index
           </p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight tracking-[-0.01em] text-[color:var(--color-fg-strong)] sm:text-5xl">
+          <h1 className="mt-4 max-w-3xl font-display text-3xl sm:text-4xl font-semibold text-ink-strong leading-tight tracking-[-0.01em]">
             Federated resolution for the agentic web.
           </h1>
-          <p className="mt-6 max-w-2xl text-base leading-relaxed text-[color:var(--color-fg-muted)]">
+          <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-medium">
             NandaIndex resolves any agent identity (domain, email, or URN) to the
             correct next discovery object: AI Catalog, DNS-AID, A2A Agent Card, or
             personal agent card. It bridges agent discovery across enterprises, small
@@ -22,7 +22,7 @@ export function Hero() {
             {["Enterprise", "SMB", "Individual"].map((item) => (
               <span
                 key={item}
-                className="inline-flex items-center rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-fg-default)] transition-colors hover:bg-[color:var(--color-primary-soft)] hover:text-[color:var(--color-primary-deep)]"
+                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
               >
                 {item}
               </span>
@@ -34,12 +34,12 @@ export function Hero() {
           {heroStats.map((stat) => (
             <div
               key={stat.label}
-              className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 shadow-[var(--shadow-card)]"
+              className="bg-surface-light rounded-card border border-line p-6 shadow-card"
             >
-              <div className="text-3xl font-semibold text-[color:var(--color-primary)]">
+              <div className="text-3xl font-semibold text-brand-500">
                 {stat.value}
               </div>
-              <div className="mt-2 text-xs font-medium uppercase tracking-wide text-[color:var(--color-fg-weak)]">
+              <div className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-weak">
                 {stat.label}
               </div>
             </div>

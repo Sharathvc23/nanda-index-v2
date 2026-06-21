@@ -11,7 +11,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { User } from "@/lib/nanda-types";
 
 const cardClass =
-  "rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[var(--shadow-card)]";
+  "bg-surface-light rounded-card border border-line shadow-card";
 
 export default function DashboardPage() {
   useRequireAuth();
@@ -48,7 +48,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <PageShell title="Dashboard" description="Loading your profile…">
-        <div className={`${cardClass} p-6 text-sm text-[color:var(--color-fg-weak)]`}>
+        <div className={`${cardClass} p-6 text-sm text-ink-weak`}>
           Loading…
         </div>
       </PageShell>
@@ -58,7 +58,7 @@ export default function DashboardPage() {
   if (error || !user) {
     return (
       <PageShell title="Dashboard" description="">
-        <div className="rounded-[var(--radius-card)] border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] p-4 text-sm text-[color:var(--color-danger)]">
+        <div className="rounded-card border border-[#b42318]/30 bg-[#fef3f2] p-4 text-sm text-[#b42318]">
           {error ?? "Something went wrong."}
         </div>
       </PageShell>
@@ -72,14 +72,14 @@ export default function DashboardPage() {
     >
       <div className="space-y-6">
         {/* Profile card */}
-        <div className={`${cardClass} flex items-center justify-between p-5`}>
+        <div className={`${cardClass} flex items-center justify-between p-6`}>
           <div>
-            <p className="font-semibold text-[color:var(--color-fg-strong)]">{user.display_name ?? user.email}</p>
-            <p className="text-sm text-[color:var(--color-fg-muted)]">{user.email}</p>
+            <p className="font-semibold text-ink-strong">{user.display_name ?? user.email}</p>
+            <p className="text-sm text-ink-medium">{user.email}</p>
           </div>
           <button
             onClick={signOut}
-            className="inline-flex h-9 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 text-sm font-medium text-[color:var(--color-fg-default)] transition-colors hover:bg-[color:var(--color-surface-2)]"
+            className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition"
           >
             Sign out
           </button>
@@ -88,21 +88,21 @@ export default function DashboardPage() {
         {/* Organizations */}
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-fg-weak)]">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-weak">
               Your Organizations
             </h2>
             <Link
               href="/dashboard/orgs/new"
-              className="inline-flex h-9 items-center rounded-[var(--radius-control)] bg-[color:var(--color-primary)] px-4 text-sm font-medium text-white transition-colors hover:bg-[color:var(--color-primary-hover)]"
+              className="inline-flex items-center justify-center h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
             >
               + Register new
             </Link>
           </div>
 
           {user.orgs.length === 0 ? (
-            <div className={`${cardClass} p-6 text-sm text-[color:var(--color-fg-muted)]`}>
+            <div className={`${cardClass} p-6 text-sm text-ink-medium`}>
               You have no organizations yet.{" "}
-              <Link href="/dashboard/orgs/new" className="text-[color:var(--color-primary)] hover:underline">
+              <Link href="/dashboard/orgs/new" className="text-brand-600 hover:underline">
                 Register one
               </Link>
               .
@@ -113,17 +113,17 @@ export default function DashboardPage() {
                 <Link
                   key={org.org_id}
                   href={`/dashboard/orgs/${org.org_id}`}
-                  className={`${cardClass} flex items-center justify-between p-5 transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]`}
+                  className="bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition cursor-pointer flex items-center justify-between gap-3"
                 >
                   <div>
-                    <p className="font-medium text-[color:var(--color-fg-strong)]">{org.display_name}</p>
-                    <p className="font-mono text-xs text-[color:var(--color-fg-weak)]">{org.org_id}</p>
+                    <p className="font-semibold text-ink-strong">{org.display_name}</p>
+                    <p className="font-mono text-xs text-ink-weak">{org.org_id}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs capitalize text-[color:var(--color-fg-weak)]">{org.role}</span>
+                    <span className="text-xs capitalize text-ink-weak">{org.role}</span>
                     <StatusBadge status={org.status} />
                     {!org.email_verified && (
-                      <span className="rounded-full bg-[color:var(--color-warning-soft)] px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-[color:var(--color-warning)]">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#fdeccc] text-[#8a5a06]">
                         verify email
                       </span>
                     )}

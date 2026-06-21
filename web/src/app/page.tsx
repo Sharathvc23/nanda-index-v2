@@ -16,7 +16,7 @@ export default function HomePage() {
     <>
       <Hero />
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <section className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Quick actions"
           title="Resolve, register, and browse"
@@ -28,14 +28,16 @@ export default function HomePage() {
             <Link
               key={card.href}
               href={card.href}
-              className="group rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-card-hover)]"
+              className="group"
             >
-              <h2 className="text-lg font-semibold text-[color:var(--color-fg-strong)] group-hover:text-[color:var(--color-primary)]">
-                {card.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-[color:var(--color-fg-muted)]">
-                {card.desc}
-              </p>
+              <article className="bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition cursor-pointer flex flex-col h-full gap-3">
+                <h3 className="font-semibold text-ink-strong group-hover:text-brand-600">
+                  {card.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-ink-medium">
+                  {card.desc}
+                </p>
+              </article>
             </Link>
           ))}
         </div>

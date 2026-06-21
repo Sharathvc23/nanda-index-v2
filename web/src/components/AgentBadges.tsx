@@ -2,14 +2,14 @@ import { cn } from "@/lib/utils";
 
 export function ProtocolBadge({ protocol }: { protocol: string }) {
   const colors: Record<string, string> = {
-    a2a:   "bg-[color:var(--color-primary-soft)] text-[color:var(--color-primary)]",
-    mcp:   "bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]",
-    rest:  "bg-[color:var(--color-surface-2)] text-[color:var(--color-fg-muted)]",
-    https: "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning)]",
+    a2a:   "bg-brand-200 text-brand-600",
+    mcp:   "bg-accent-teal text-accent-teal-ink",
+    rest:  "bg-surface-tag text-ink",
+    https: "bg-[#fdeccc] text-[#8a5a06]",
   };
   return (
     <span className={cn(
-      "inline-flex rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide",
       colors[protocol] ?? colors.rest,
     )}>
       {protocol}
@@ -20,10 +20,10 @@ export function ProtocolBadge({ protocol }: { protocol: string }) {
 export function VisibilityBadge({ visibility }: { visibility: string }) {
   return (
     <span className={cn(
-      "inline-flex rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide",
       visibility === "private"
-        ? "bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning)]"
-        : "bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]",
+        ? "bg-[#fdeccc] text-[#8a5a06]"
+        : "bg-accent-teal text-accent-teal-ink",
     )}>
       {visibility}
     </span>

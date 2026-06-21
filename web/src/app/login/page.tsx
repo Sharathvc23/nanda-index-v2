@@ -13,13 +13,13 @@ const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
 type Mode = "login" | "register";
 
 const inputClass =
-  "w-full h-10 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm text-[color:var(--color-fg-default)] placeholder:text-[color:var(--color-fg-weak)] outline-none transition-colors focus:border-[color:var(--color-primary)] focus:ring-2 focus:ring-[color:var(--color-primary)]/30";
+  "w-full h-10 rounded-control border-2 border-line bg-surface-light px-3 text-sm text-ink placeholder:text-ink-weak focus:outline-none focus:border-brand-500 transition-colors";
 
 const primaryBtnClass =
-  "inline-flex h-10 w-full items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-primary)] px-4 text-sm font-medium text-white transition-colors hover:bg-[color:var(--color-primary-hover)] disabled:opacity-60";
+  "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition disabled:opacity-60";
 
 const oauthBtnClass =
-  "flex w-full items-center justify-center gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-6 py-2.5 text-sm font-medium text-[color:var(--color-fg-default)] transition-colors hover:bg-[color:var(--color-surface-2)]";
+  "inline-flex items-center justify-center gap-3 h-9 w-full rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -72,32 +72,32 @@ function LoginPageInner() {
       <div className="mx-auto max-w-md space-y-5">
         {/* Session / OAuth notices */}
         {reason === "session_expired" && (
-          <p className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning-soft)] px-4 py-2.5 text-sm text-[color:var(--color-warning)]">
+          <p className="rounded-control border border-[#8a5a06]/30 bg-[#fdeccc] px-4 py-2.5 text-sm text-[#8a5a06]">
             Your session expired. Please sign in again.
           </p>
         )}
         {oauthError === "oauth_not_configured" && (
-          <p className="rounded-[var(--radius-control)] border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-4 py-2.5 text-sm text-[color:var(--color-danger)]">
+          <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
             OAuth login is not configured on this server. Use email and password instead.
           </p>
         )}
         {oauthError && oauthError !== "oauth_not_configured" && (
-          <p className="rounded-[var(--radius-control)] border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-4 py-2.5 text-sm text-[color:var(--color-danger)]">
+          <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
             Sign-in failed. Please try again.
           </p>
         )}
 
         {/* Email / password form */}
-        <div className="rounded-[var(--radius-card)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-8 shadow-[var(--shadow-card)]">
+        <div className="bg-surface-light rounded-card border border-line p-8 shadow-card">
           {/* Mode toggle */}
-          <div className="mb-5 flex rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] p-1 text-sm">
+          <div className="mb-5 flex rounded-control border border-line bg-surface-strong p-1 text-sm">
             <button
               type="button"
               onClick={() => { setMode("login"); setError(null); }}
-              className={`flex-1 rounded-[var(--radius-control)] py-1.5 font-medium transition ${
+              className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "login"
-                  ? "bg-[color:var(--color-surface)] text-[color:var(--color-fg-strong)] shadow-[var(--shadow-sm)]"
-                  : "text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg-default)]"
+                  ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
+                  : "text-ink-medium hover:text-ink"
               }`}
             >
               Sign in
@@ -105,10 +105,10 @@ function LoginPageInner() {
             <button
               type="button"
               onClick={() => { setMode("register"); setError(null); }}
-              className={`flex-1 rounded-[var(--radius-control)] py-1.5 font-medium transition ${
+              className={`flex-1 rounded-control py-1.5 font-medium transition ${
                 mode === "register"
-                  ? "bg-[color:var(--color-surface)] text-[color:var(--color-fg-strong)] shadow-[var(--shadow-sm)]"
-                  : "text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg-default)]"
+                  ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
+                  : "text-ink-medium hover:text-ink"
               }`}
             >
               Create account
@@ -144,7 +144,7 @@ function LoginPageInner() {
             />
 
             {error && (
-              <p className="rounded-[var(--radius-control)] border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger-soft)] px-4 py-2.5 text-sm text-[color:var(--color-danger)]">
+              <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
                 {error}
               </p>
             )}
@@ -162,10 +162,10 @@ function LoginPageInner() {
         {/* OAuth buttons — only shown when provider is configured on the server */}
         {providers && (providers.google || providers.github) && (
           <>
-            <div className="flex items-center gap-3 text-xs text-[color:var(--color-fg-weak)]">
-              <div className="flex-1 border-t border-[color:var(--color-border)]" />
+            <div className="flex items-center gap-3 text-xs text-ink-weak">
+              <div className="flex-1 border-t border-line" />
               or continue with
-              <div className="flex-1 border-t border-[color:var(--color-border)]" />
+              <div className="flex-1 border-t border-line" />
             </div>
 
             {providers.google && (
@@ -191,8 +191,8 @@ function LoginPageInner() {
           </>
         )}
 
-        <p className="text-center text-xs text-[color:var(--color-fg-weak)]">
-          <Link href="/registries" className="underline hover:text-[color:var(--color-primary)]">
+        <p className="text-center text-xs text-ink-weak">
+          <Link href="/registries" className="underline hover:text-brand-600">
             Browse public records
           </Link>{" "}
           without signing in.
@@ -206,7 +206,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-[color:var(--color-fg-weak)]">Loading…</p>
+        <p className="text-sm text-ink-weak">Loading…</p>
       </div>
     }>
       <LoginPageInner />

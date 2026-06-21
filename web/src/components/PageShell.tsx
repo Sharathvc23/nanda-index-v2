@@ -9,17 +9,17 @@ type Props = {
 
 export function PageShell({ eyebrow, title, description, children }: Props) {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-fg-weak)]">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-weak">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-3xl font-semibold tracking-[-0.01em] text-[color:var(--color-fg-strong)]">
+        <h1 className="font-display text-2xl font-bold text-ink-strong leading-tight">
           {title}
         </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[color:var(--color-fg-muted)]">
+        <p className="mt-3 max-w-3xl text-sm text-ink-medium leading-relaxed">
           {description}
         </p>
       </div>

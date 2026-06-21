@@ -10,6 +10,9 @@ import { clearAuthToken } from "@/lib/auth";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { User } from "@/lib/nanda-types";
 
+const cardClass =
+  "bg-surface-light rounded-card border border-line shadow-card";
+
 export default function DashboardPage() {
   useRequireAuth();
   const router = useRouter();
@@ -45,7 +48,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <PageShell title="Dashboard" description="Loading your profile…">
-        <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm text-sm text-slate-400">
+        <div className={`${cardClass} p-6 text-sm text-ink-weak`}>
           Loading…
         </div>
       </PageShell>
@@ -55,7 +58,7 @@ export default function DashboardPage() {
   if (error || !user) {
     return (
       <PageShell title="Dashboard" description="">
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+        <div className="rounded-card border border-[#b42318]/30 bg-[#fef3f2] p-4 text-sm text-[#b42318]">
           {error ?? "Something went wrong."}
         </div>
       </PageShell>
@@ -69,14 +72,14 @@ export default function DashboardPage() {
     >
       <div className="space-y-6">
         {/* Profile card */}
-        <div className="flex items-center justify-between rounded-3xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className={`${cardClass} flex items-center justify-between p-6`}>
           <div>
-            <p className="font-semibold text-slate-950">{user.display_name ?? user.email}</p>
-            <p className="text-sm text-slate-500">{user.email}</p>
+            <p className="font-semibold text-ink-strong">{user.display_name ?? user.email}</p>
+            <p className="text-sm text-ink-medium">{user.email}</p>
           </div>
           <button
             onClick={signOut}
-            className="rounded-2xl border border-black/10 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center justify-center h-9 rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition"
           >
             Sign out
           </button>
@@ -85,21 +88,21 @@ export default function DashboardPage() {
         {/* Organizations */}
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-weak">
               Your Organizations
             </h2>
             <Link
               href="/dashboard/orgs/new"
-              className="rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center justify-center h-9 rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition"
             >
               + Register new
             </Link>
           </div>
 
           {user.orgs.length === 0 ? (
-            <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm text-sm text-slate-400">
+            <div className={`${cardClass} p-6 text-sm text-ink-medium`}>
               You have no organizations yet.{" "}
-              <Link href="/dashboard/orgs/new" className="text-indigo-600 hover:underline">
+              <Link href="/dashboard/orgs/new" className="text-brand-600 hover:underline">
                 Register one
               </Link>
               .
@@ -110,17 +113,17 @@ export default function DashboardPage() {
                 <Link
                   key={org.org_id}
                   href={`/dashboard/orgs/${org.org_id}`}
-                  className="flex items-center justify-between rounded-3xl border border-black/10 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="bg-surface-light rounded-card border border-line/70 shadow-card p-4 hover:shadow-card-hover hover:border-line-strong transition cursor-pointer flex items-center justify-between gap-3"
                 >
                   <div>
-                    <p className="font-medium text-slate-950">{org.display_name}</p>
-                    <p className="font-mono text-xs text-slate-500">{org.org_id}</p>
+                    <p className="font-semibold text-ink-strong">{org.display_name}</p>
+                    <p className="font-mono text-xs text-ink-weak">{org.org_id}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400 capitalize">{org.role}</span>
+                    <span className="text-xs capitalize text-ink-weak">{org.role}</span>
                     <StatusBadge status={org.status} />
                     {!org.email_verified && (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-600">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#fdeccc] text-[#8a5a06]">
                         verify email
                       </span>
                     )}

@@ -12,6 +12,15 @@ const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
 
 type Mode = "login" | "register";
 
+const inputClass =
+  "w-full h-10 rounded-control border-2 border-line bg-surface-light px-3 text-sm text-ink placeholder:text-ink-weak focus:outline-none focus:border-brand-500 transition-colors";
+
+const primaryBtnClass =
+  "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition disabled:opacity-60";
+
+const oauthBtnClass =
+  "inline-flex items-center justify-center gap-3 h-9 w-full rounded-control border-2 border-line bg-surface-light px-3 text-sm font-medium text-ink hover:border-line-strong transition";
+
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,33 +69,35 @@ function LoginPageInner() {
       title="Sign In"
       description="Sign in to manage your organization's index record."
     >
-      <div className="mx-auto max-w-sm space-y-5">
+      <div className="mx-auto max-w-md space-y-5">
         {/* Session / OAuth notices */}
         {reason === "session_expired" && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          <p className="rounded-control border border-[#8a5a06]/30 bg-[#fdeccc] px-4 py-2.5 text-sm text-[#8a5a06]">
             Your session expired. Please sign in again.
           </p>
         )}
         {oauthError === "oauth_not_configured" && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
+          <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
             OAuth login is not configured on this server. Use email and password instead.
           </p>
         )}
         {oauthError && oauthError !== "oauth_not_configured" && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
+          <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
             Sign-in failed. Please try again.
           </p>
         )}
 
         {/* Email / password form */}
-        <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
+        <div className="bg-surface-light rounded-card border border-line p-8 shadow-card">
           {/* Mode toggle */}
-          <div className="mb-5 flex rounded-xl border border-black/10 p-1 text-sm">
+          <div className="mb-5 flex rounded-control border border-line bg-surface-strong p-1 text-sm">
             <button
               type="button"
               onClick={() => { setMode("login"); setError(null); }}
-              className={`flex-1 rounded-lg py-1.5 font-medium transition ${
-                mode === "login" ? "bg-slate-950 text-white" : "text-slate-500 hover:text-slate-700"
+              className={`flex-1 rounded-control py-1.5 font-medium transition ${
+                mode === "login"
+                  ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
+                  : "text-ink-medium hover:text-ink"
               }`}
             >
               Sign in
@@ -94,8 +105,10 @@ function LoginPageInner() {
             <button
               type="button"
               onClick={() => { setMode("register"); setError(null); }}
-              className={`flex-1 rounded-lg py-1.5 font-medium transition ${
-                mode === "register" ? "bg-slate-950 text-white" : "text-slate-500 hover:text-slate-700"
+              className={`flex-1 rounded-control py-1.5 font-medium transition ${
+                mode === "register"
+                  ? "bg-surface-light text-ink-strong shadow-[var(--shadow-sm)]"
+                  : "text-ink-medium hover:text-ink"
               }`}
             >
               Create account
@@ -109,7 +122,7 @@ function LoginPageInner() {
                 placeholder="Display name (optional)"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full rounded-xl border border-black/10 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                className={inputClass}
               />
             )}
             <input
@@ -118,7 +131,7 @@ function LoginPageInner() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded-xl border border-black/10 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+              className={inputClass}
             />
             <input
               type="password"
@@ -127,11 +140,11 @@ function LoginPageInner() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full rounded-xl border border-black/10 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+              className={inputClass}
             />
 
             {error && (
-              <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
+              <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
                 {error}
               </p>
             )}
@@ -139,27 +152,24 @@ function LoginPageInner() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-slate-950 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              className={primaryBtnClass}
             >
               {loading ? "…" : mode === "register" ? "Create account" : "Sign in"}
             </button>
           </form>
         </div>
 
-        {/* OAuth buttons — only shown when provider is configured on the server */}
+        {/* OAuth buttons - only shown when provider is configured on the server */}
         {providers && (providers.google || providers.github) && (
           <>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <div className="flex-1 border-t border-black/10" />
+            <div className="flex items-center gap-3 text-xs text-ink-weak">
+              <div className="flex-1 border-t border-line" />
               or continue with
-              <div className="flex-1 border-t border-black/10" />
+              <div className="flex-1 border-t border-line" />
             </div>
 
             {providers.google && (
-              <a
-                href={`${API_BASE}/auth/google`}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 bg-white px-6 py-3.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
+              <a href={`${API_BASE}/auth/google`} className={oauthBtnClass}>
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -171,10 +181,7 @@ function LoginPageInner() {
             )}
 
             {providers.github && (
-              <a
-                href={`${API_BASE}/auth/github`}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 bg-white px-6 py-3.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
+              <a href={`${API_BASE}/auth/github`} className={oauthBtnClass}>
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                   <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
                 </svg>
@@ -184,8 +191,8 @@ function LoginPageInner() {
           </>
         )}
 
-        <p className="text-center text-xs text-slate-400">
-          <Link href="/registries" className="underline hover:text-slate-600">
+        <p className="text-center text-xs text-ink-weak">
+          <Link href="/registries" className="underline hover:text-brand-600">
             Browse public records
           </Link>{" "}
           without signing in.
@@ -199,7 +206,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-ink-weak">Loading…</p>
       </div>
     }>
       <LoginPageInner />

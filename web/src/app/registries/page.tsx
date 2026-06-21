@@ -53,27 +53,31 @@ export default function RegistriesPage() {
       description="All organizations registered in the NANDA Index."
     >
       <div className="mb-4 flex flex-wrap gap-2">
-        {(["active", "all", "pending", "suspended"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`rounded-full border px-4 py-2 text-sm capitalize ${
-              statusFilter === s
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-black/10 bg-white"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+        {(["active", "all", "pending", "suspended"] as const).map((s) => {
+          const active = statusFilter === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={
+                "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize border-2 transition-colors " +
+                (active
+                  ? "border-brand-500 bg-brand-200 text-brand-800"
+                  : "border-line bg-surface-light text-ink hover:border-line-strong")
+              }
+            >
+              {s}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
-        <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
+        <div className="bg-surface-light rounded-card border border-line p-6 text-sm text-ink-medium shadow-card">
           Loading…
         </div>
       ) : error ? (
-        <div className="mb-6 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+        <div className="mb-6 rounded-card border border-[#b42318]/30 bg-[#fef3f2] p-4 text-sm text-[#b42318]">
           {error}
         </div>
       ) : items.length === 0 ? (
@@ -85,7 +89,7 @@ export default function RegistriesPage() {
         />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          <div className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-card border border-line bg-surface-light shadow-card">
             <table className="w-full table-fixed text-left">
               <colgroup>
                 <col style={{ width: "35%" }} />
@@ -93,34 +97,42 @@ export default function RegistriesPage() {
                 <col style={{ width: "15%" }} />
                 <col style={{ width: "15%" }} />
               </colgroup>
-              <thead className="bg-slate-50 text-xs uppercase tracking-[0.18em] text-slate-500">
+              <thead className="bg-surface-strong text-xs font-bold uppercase tracking-wide text-ink-weak">
                 <tr>
-                  <th className="px-4 py-4">Organization</th>
-                  <th className="px-4 py-4">Domain</th>
-                  <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4">Verified</th>
+                  <th className="px-4 py-3">Organization</th>
+                  <th className="px-4 py-3">Domain</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Verified</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr
-                    key={item.org_id}
-                    onClick={() => setSelected(item)}
-                    className="cursor-pointer border-t hover:bg-slate-50"
-                  >
-                    <td className="px-4 py-4 align-top">
-                      <div className="font-medium text-slate-950 break-words">{item.display_name}</div>
-                      <div className="text-sm text-slate-500 break-all">{item.org_id}</div>
-                    </td>
-                    <td className="px-4 py-4 align-top break-all">{item.domain}</td>
-                    <td className="px-4 py-4 align-top">
-                      <StatusBadge status={item.status} />
-                    </td>
-                    <td className="px-4 py-4 align-top text-sm">
-                      {item.email_verified ? "✓" : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {items.map((item) => {
+                  const isSelected = selected?.org_id === item.org_id;
+                  return (
+                    <tr
+                      key={item.org_id}
+                      onClick={() => setSelected(item)}
+                      className={
+                        "cursor-pointer border-t border-line transition-colors " +
+                        (isSelected
+                          ? "bg-brand-200"
+                          : "hover:bg-surface-strong")
+                      }
+                    >
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-semibold text-ink-strong break-words">{item.display_name}</div>
+                        <div className="font-mono text-xs text-ink-weak break-all">{item.org_id}</div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-ink-medium break-all">{item.domain}</td>
+                      <td className="px-4 py-3 align-top">
+                        <StatusBadge status={item.status} />
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-ink-medium">
+                        {item.email_verified ? "✓" : "-"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -128,46 +140,49 @@ export default function RegistriesPage() {
           <div className="min-w-0 space-y-4">
             {selected ? (
               <>
-                <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm">
-                  <h2 className="text-xl font-semibold">{selected.display_name}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{selected.domain}</p>
+                <div className="bg-surface-light rounded-card border border-line p-6 shadow-card">
+                  <h2 className="font-semibold text-ink-strong text-xl">{selected.display_name}</h2>
+                  <p className="mt-1 text-sm text-ink-medium">{selected.domain}</p>
                   {selected.description && (
-                    <p className="mt-2 text-sm text-slate-500">{selected.description}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-ink-medium">{selected.description}</p>
                   )}
                   {selected.tags && selected.tags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {selected.tags.map((tag) => (
-                        <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-mono text-slate-600">
+                        <span
+                          key={tag}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-tag text-ink"
+                        >
                           {tag}
                         </span>
                       ))}
                     </div>
                   )}
-                  <div className="mt-4 grid gap-2 text-sm text-slate-700">
+                  <div className="mt-4 grid gap-2 text-sm text-ink">
                     <div>
-                      <span className="font-medium">Catalog URL:</span>{" "}
+                      <span className="font-semibold text-ink-strong">Catalog URL:</span>{" "}
                       {selected.registry_url ? (
                         <a
                           href={selected.registry_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="break-all font-mono text-xs text-indigo-600 hover:underline"
+                          className="break-all font-mono text-xs text-brand-600 hover:underline"
                         >
                           {selected.registry_url}
                         </a>
                       ) : (
-                        <span className="text-slate-400 italic">—</span>
+                        <span className="text-ink-weak">-</span>
                       )}
                     </div>
                     <div>
-                      <span className="font-medium">TTL:</span> {selected.ttl_seconds}s
+                      <span className="font-semibold text-ink-strong">TTL:</span> {selected.ttl_seconds}s
                     </div>
                     <div>
-                      <span className="font-medium">Email verified:</span>{" "}
+                      <span className="font-semibold text-ink-strong">Email verified:</span>{" "}
                       {selected.email_verified ? "Yes" : "No"}
                     </div>
                     <div>
-                      <span className="font-medium">Created:</span>{" "}
+                      <span className="font-semibold text-ink-strong">Created:</span>{" "}
                       {new Date(selected.created_at).toLocaleDateString()}
                     </div>
                   </div>

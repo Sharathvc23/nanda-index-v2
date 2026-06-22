@@ -20,12 +20,8 @@ export async function resolveAgent(locator: ParsedLocator): Promise<ResolveRespo
     // Email-identity: look up by the full stored identifier URN
     org = await findByIdentifier(urn);
   } else {
-    // Domain-based: lookup by domain, then slug fallback, then identifier fallback
+    // Domain-based: exact domain match only, then identifier fallback
     org = await findByDomain(domain!);
-    if (!org) {
-      const slug = domain!.replace(/\.[^.]+$/, '');
-      org = await findByOrgId(slug);
-    }
     if (!org) {
       org = await findByIdentifier(urn);
     }

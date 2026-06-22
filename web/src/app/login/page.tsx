@@ -192,7 +192,7 @@ function LoginPageInner() {
         )}
 
         <p className="text-center text-xs text-ink-weak">
-          <Link href="/registries" className="underline hover:text-brand-600">
+          <Link href="/" className="underline hover:text-brand-600">
             Browse public records
           </Link>{" "}
           without signing in.

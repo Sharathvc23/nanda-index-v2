@@ -29,7 +29,7 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
   return (
     <div
       className="flex cursor-pointer items-start justify-between rounded-2xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md"
-      onClick={() => router.push(`/registries`)}
+      onClick={() => router.push(`/`)}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

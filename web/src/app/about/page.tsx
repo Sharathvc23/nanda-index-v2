@@ -6,7 +6,7 @@ import { SectionHeading } from "@/components/SectionHeading";
 const cards = [
   { href: "/login", title: "Sign In", desc: "Login to manage your organization's index record" },
   { href: "/dashboard", title: "Dashboard", desc: "Register and update your AI Catalog, DNS-AID, gateway, or agent card entry" },
-  { href: "/registries", title: "Browse", desc: "View all active organizations and their discovery paths in the index" },
+  { href: "/", title: "Overview", desc: "View all active organizations and their discovery paths in the index" },
   { href: "/resolve", title: "Resolve", desc: "Resolve any domain, email, or URN identity to its next discovery object" },
   { href: "/registry", title: "Registry Manager", desc: "Manage agents on your Registry Server" },
 ];

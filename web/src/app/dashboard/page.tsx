@@ -119,9 +119,9 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-slate-400 capitalize">{org.role}</span>
                     <StatusBadge status={org.status} />
-                    {!org.email_verified && (
+                    {!org.domain_verified && (
                       <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-600">
-                        verify email
+                        verify domain
                       </span>
                     )}
                   </div>

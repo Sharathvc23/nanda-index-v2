@@ -8,8 +8,18 @@ export interface IndexRecord {
   ttl_seconds: number;
   status: OrgStatus;
   email_verified: boolean;
+  domain_verified: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** DNS TXT challenge issued to prove ownership of an org's domain. */
+export interface DomainChallenge {
+  domain: string;
+  record_name: string;
+  record_type: string;
+  record_value: string;
+  expires_at: string;
 }
 
 /** AI Catalog CatalogEntry (application/ai-catalog+json). */
@@ -51,6 +61,7 @@ export interface OrgMembership {
   role: string;
   status: OrgStatus;
   email_verified: boolean;
+  domain_verified: boolean;
 }
 
 export interface SearchResponse {

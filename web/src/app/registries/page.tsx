@@ -117,7 +117,7 @@ export default function RegistriesPage() {
                       <StatusBadge status={item.status} />
                     </td>
                     <td className="px-4 py-4 align-top text-sm">
-                      {item.email_verified ? "✓" : "—"}
+                      {item.domain_verified ? "✓" : "—"}
                     </td>
                   </tr>
                 ))}
@@ -147,8 +147,8 @@ export default function RegistriesPage() {
                       <span className="font-medium">TTL:</span> {selected.ttl_seconds}s
                     </div>
                     <div>
-                      <span className="font-medium">Email verified:</span>{" "}
-                      {selected.email_verified ? "Yes" : "No"}
+                      <span className="font-medium">Domain verified:</span>{" "}
+                      {selected.domain_verified ? "Yes" : "No"}
                     </div>
                     <div>
                       <span className="font-medium">Created:</span>{" "}

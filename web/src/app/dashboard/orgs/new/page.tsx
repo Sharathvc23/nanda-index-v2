@@ -192,13 +192,22 @@ function SuccessScreen({ record }: { record: IndexRecord }) {
       </div>
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-        <p className="text-sm font-semibold text-amber-800">Check your email</p>
+        <p className="text-sm font-semibold text-amber-800">Verify your domain to go live</p>
         <p className="mt-0.5 text-xs text-amber-700">
-          Your record is <span className="font-semibold">pending</span> until you verify ownership via the link sent to your contact email.
+          Your record is <span className="font-semibold">pending</span> and hidden from the public index until you prove ownership of <span className="font-mono">{record.domain}</span> by adding a DNS TXT record. Open your org to get the record. (We&apos;ve also emailed a link to confirm your contact address.)
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href={`/dashboard/orgs/${record.org_id}`}
+          className="flex flex-col rounded-2xl border border-amber-300 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm"
+        >
+          <span className="text-sm font-semibold text-slate-950">Verify domain →</span>
+          <span className="mt-0.5 text-xs text-slate-500">
+            Get your DNS TXT record and activate this org.
+          </span>
+        </Link>
         <Link
           href="/rap"
           className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm"
@@ -206,15 +215,6 @@ function SuccessScreen({ record }: { record: IndexRecord }) {
           <span className="text-sm font-semibold text-slate-950">Add agents →</span>
           <span className="mt-0.5 text-xs text-slate-500">
             Open Registry Manager to register your first agent.
-          </span>
-        </Link>
-        <Link
-          href={`/dashboard/orgs/${record.org_id}`}
-          className="flex flex-col rounded-2xl border border-black/10 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm"
-        >
-          <span className="text-sm font-semibold text-slate-950">View org →</span>
-          <span className="mt-0.5 text-xs text-slate-500">
-            See your org record and edit settings.
           </span>
         </Link>
       </div>

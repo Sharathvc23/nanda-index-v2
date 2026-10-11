@@ -185,7 +185,9 @@ def wired(monkeypatch):
         lunch,
         "search_capability",
         lambda q, **_: [
-            lunch.Counterparty(label=q, url=f"https://{q}.test", how="searched", urn=f"urn:ai:domain:{q}.test")
+            lunch.Counterparty(
+                label=q, url=f"https://{q}.test", how="searched", urn=f"urn:air:{q}.test:catalog:root"
+            )
         ],
     )
     monkeypatch.setattr(

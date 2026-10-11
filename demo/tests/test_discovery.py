@@ -43,13 +43,13 @@ def fake_index(monkeypatch):
                         {
                             "org_id": "orrery-demo",
                             "registry_url": "https://a.test",
-                            "identifier": "urn:ai:domain:a.test",
+                            "identifier": "urn:air:a.test:catalog:root",
                             "tags": ["general ai"],
                         },
                         {
                             "org_id": "regentix",
                             "registry_url": "https://a.test",
-                            "identifier": "urn:ai:domain:regentix.ai",
+                            "identifier": "urn:air:regentix.ai:catalog:root",
                             "tags": ["general ai"],
                         },
                         {"org_id": "other", "registry_url": "https://b.test", "tags": []},
@@ -78,7 +78,7 @@ def test_several_records_for_one_server_are_one_counterparty(fake_index):
 
 
 def test_a_searched_counterparty_records_the_index_identifier(fake_index):
-    assert search_capability("regentix")[0].urn == "urn:ai:domain:a.test"
+    assert search_capability("regentix")[0].urn == "urn:air:a.test:catalog:root"
 
 
 def test_no_match_is_a_finding_not_an_error(monkeypatch):

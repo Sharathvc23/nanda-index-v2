@@ -1,6 +1,7 @@
 import { getAuthToken } from "./auth";
 import type {
   IndexRecord,
+  IndexCatalogEntry,
   CatalogEntry,
   ResolveResponse,
   SearchResponse,
@@ -70,14 +71,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return parseApiResponse<T>(res);
 }
 
-/** GET /api/v1/index — list all active orgs. */
-export async function listIndexRecords(): Promise<IndexRecord[]> {
-  return request<IndexRecord[]>("/api/v1/index");
+/** GET /api/v1/index — list all active entries (AI Catalog entry shape). */
+export async function listIndexRecords(): Promise<IndexCatalogEntry[]> {
+  return request<IndexCatalogEntry[]>("/api/v1/index");
 }
 
-/** GET /api/v1/index/:org_id — single IndexRecord. */
-export async function getIndexRecord(orgId: string): Promise<IndexRecord> {
-  return request<IndexRecord>(`/api/v1/index/${encodeURIComponent(orgId)}`);
+/** GET /api/v1/index/:org_id — a single entry (AI Catalog entry shape). */
+export async function getIndexRecord(orgId: string): Promise<IndexCatalogEntry> {
+  return request<IndexCatalogEntry>(`/api/v1/index/${encodeURIComponent(orgId)}`);
 }
 
 /** GET /api/v1/search?q= — keyword search or URN lookup. Returns { query, count, results }. */
@@ -96,9 +97,10 @@ export async function agenticSearch(q: string, limit?: number): Promise<AgenticS
 }
 
 /**
- * GET /api/v1/resolve?locator=<agent>@<domain>:global
- * Returns identifier + IndexRecord from the NANDA Index.
- * The caller fetches the AgentRecord directly: GET <index_record.registry_url>/agents/<identifier>
+ * GET /api/v1/resolve?locator=urn:air:<publisher-FQDN>:<namespace...>:<short-name>
+ * Returns the matching IndexRecord. On match "exact" registry_url is the next
+ * hop itself; on match "publisher" it is the publisher's catalog, and the
+ * caller looks up <identifier> (the short-name) inside it.
  */
 export async function resolveAgent(locator: string): Promise<ResolveResponse> {
   return request<ResolveResponse>(`/api/v1/resolve?locator=${encodeURIComponent(locator)}`);

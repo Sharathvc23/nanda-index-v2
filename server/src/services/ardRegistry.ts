@@ -1,7 +1,7 @@
 import type { Config } from '../config/index.js';
 import type { Organization } from '../db/queries/organizations.js';
-import type { AgentCandidate } from '../types/api/agentic-search.js';
-import type { ArdRegistryDescriptor, ArdSearchResultItem } from '../types/api/ard.js';
+import type { AgentCandidate, FinderReferral } from '../types/api/agentic-search.js';
+import type { ArdReferral, ArdRegistryDescriptor, ArdSearchResultItem } from '../types/api/ard.js';
 import { NANDA_TO_ARD_TYPE, toArdType } from '../lib/ardMapping.js';
 import { ARD_MEDIA_TYPE } from '../lib/mediaTypes.js';
 
@@ -13,12 +13,21 @@ function hostOf(baseUrl: string): string {
   }
 }
 
+function hostnameOf(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname;
+  } catch {
+    return baseUrl;
+  }
+}
+
 /** Builds the ARD registry descriptor served at GET /api/ard, in the same
  *  shape ora.ai's own descriptor uses (specVersion/registry/endpoints/
  *  mediaTypes/capabilities/links). */
 export function buildDescriptor(config: Config): ArdRegistryDescriptor {
   const base = config.apiBaseUrl.replace(/\/+$/, '');
   const host = hostOf(config.apiBaseUrl);
+  const hostname = hostnameOf(config.apiBaseUrl);
 
   const mediaTypes = Array.from(new Set(Object.values(NANDA_TO_ARD_TYPE))).map((type) => ({
     type,
@@ -39,12 +48,12 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
   return {
     specVersion: '1.0',
     type: ARD_MEDIA_TYPE.AI_REGISTRY,
-    identifier: `urn:air:nanda-index:${host}`,
+    identifier: `urn:air:${hostname}:registry:nanda-index`,
     registry: {
       displayName: 'NANDA Index',
       identity: `did:web:${host}`,
       description:
-        'NANDA Index — federated agent discovery. Ranks candidate organizations locally and fans out live to their registries (enterprise, SMB/personal, DNS-AID) for agent-level search results.',
+        'NANDA Index — federated agent discovery. Ranks candidate organizations locally and fans out live to their registries (enterprise catalogs, SMB/personal agent cards, DNS SVCB pointers) for agent-level search results.',
       documentationUrl: `${base}/docs`,
     },
     endpoints: {
@@ -52,7 +61,7 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
         method: 'POST',
         url: `${base}/api/ard/search`,
         requestType: 'application/json',
-        description: 'Natural-language relevance search with optional type filter and federation.',
+        description: 'Natural-language relevance search with optional type filter. Matching ARD finders (ai-registry entries) are returned as referrals; agent identifiers are urn:air: qualified.',
       },
       explore: {
         method: 'POST',
@@ -93,6 +102,7 @@ export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultIte
     url: c.url,
     description: c.description,
     tags: c.tags,
+    publisher: c.publisher,
     provenance: {
       orgId: c.provenance.org_id,
       registryUrl: c.provenance.registry_url,
@@ -102,18 +112,25 @@ export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultIte
   };
 }
 
+/** Maps a NANDA-native finder referral (snake_case) to an ARD referral. */
+export function finderReferralToArd(r: FinderReferral): ArdReferral {
+  return { identifier: r.identifier, displayName: r.display_name, searchUrl: r.search_url };
+}
+
 /** Maps an org-level Organization row to an ARD result item — backs
  *  GET /api/ard/agents, which is scoped to organizations (see plan's Open
  *  Tradeoffs #1: a true per-agent listing would require fanning out on
  *  every page request, which is a crawl in disguise). */
 export function organizationToArdResult(org: Organization): ArdSearchResultItem {
   return {
-    identifier: org.identifier ?? org.orgId,
+    identifier: org.identifier,
     displayName: org.displayName,
     type: toArdType(org.mediaType),
     url: org.registryUrl ?? '',
     description: org.description,
     tags: org.tags,
+    publisher: org.publisher ?? undefined,
+    extensions: org.extensions,
     provenance: {
       orgId: org.orgId,
       registryUrl: org.registryUrl ?? '',

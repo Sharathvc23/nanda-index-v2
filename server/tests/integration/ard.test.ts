@@ -22,7 +22,7 @@ async function seedOrg(opts: {
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
        ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true, 'active',
-       ${`urn:ai:domain:${opts.domain}`},
+       ${`urn:air:${opts.domain}:catalog:root`},
        ${opts.mediaType ?? 'application/ai-catalog+json'},
        ${opts.description ?? null},
        ${sql.array(opts.tags ?? [])})
@@ -97,6 +97,33 @@ describe('ARD-compliant surface (/api/ard/*)', () => {
       });
       expect(body.referrals).toEqual([]);
       expect(body.pageToken).toBeNull();
+    });
+
+    it('returns a matching ARD finder as a referral, not as a result', async () => {
+      await seedOrg({
+        orgId: 'ard-finder',
+        domain: 'ard-finder.example.com',
+        displayName: 'ARD Finder Directory',
+        description: 'Federated directory of hovercraft rental agents',
+        tags: ['hovercraft', 'rental'],
+        mediaType: 'application/ai-registry+json',
+        registryUrl: 'https://directory.ard-finder.example.com/ard',
+      });
+
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/ard/search',
+        payload: { query: { text: 'hovercraft rental' } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.results.some((r: { provenance: { orgId: string } }) => r.provenance.orgId === 'ard-finder')).toBe(false);
+      expect(body.referrals).toContainEqual({
+        identifier: 'urn:air:ard-finder.example.com:catalog:root',
+        displayName: 'ARD Finder Directory',
+        searchUrl: 'https://directory.ard-finder.example.com/ard/search',
+      });
     });
 
     it('applies query.filter.type as a post-filter', async () => {

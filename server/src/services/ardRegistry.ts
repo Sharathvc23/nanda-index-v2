@@ -91,30 +91,26 @@ export function buildDescriptor(config: Config): ArdRegistryDescriptor {
   };
 }
 
-/** Maps a NANDA-native AgentCandidate (snake_case) to an ARD search result
- *  (camelCase) — the two /api/v1 and /api/ard surfaces share the same
- *  underlying agenticSearch() pipeline and only differ in wire casing. */
+/** Maps an AgentCandidate to an ARD search result — the /api/v1 and /api/ard
+ *  surfaces share the agenticSearch() pipeline and field names; ARD results
+ *  just omit the trust manifest. */
 export function agentCandidateToArdResult(c: AgentCandidate): ArdSearchResultItem {
   return {
     identifier: c.identifier,
-    displayName: c.display_name,
+    displayName: c.displayName,
     type: c.type,
     url: c.url,
     description: c.description,
     tags: c.tags,
     publisher: c.publisher,
-    provenance: {
-      orgId: c.provenance.org_id,
-      registryUrl: c.provenance.registry_url,
-      basis: c.provenance.basis,
-    },
+    provenance: c.provenance,
     score: c.score,
   };
 }
 
-/** Maps a NANDA-native finder referral (snake_case) to an ARD referral. */
+/** Maps a finder referral to an ARD referral. */
 export function finderReferralToArd(r: FinderReferral): ArdReferral {
-  return { identifier: r.identifier, displayName: r.display_name, searchUrl: r.search_url };
+  return { identifier: r.identifier, displayName: r.displayName, searchUrl: r.searchUrl };
 }
 
 /** Maps an org-level Organization row to an ARD result item — backs

@@ -1,19 +1,23 @@
 import { TRUST_MANIFEST_SCHEMA, type PublisherBlock, type TrustManifest } from './index-record.js';
 
-/** One ranked candidate agent returned by GET /api/v1/agentic-search. */
+/**
+ * One ranked candidate agent returned by GET /api/v1/agentic-search. Uses the
+ * paper's AI Catalog entry field names (displayName, trustManifest, …) plus the
+ * search-result `provenance` and `score` — the same shape as an ARD search result.
+ */
 export interface AgentCandidate {
   identifier: string;
-  display_name: string;
+  displayName: string;
   type: string;
   url: string;
   description: string | null;
   tags: string[];
   /** Publisher of the index entry the candidate was found through. */
   publisher?: PublisherBlock;
-  trust_manifest?: TrustManifest;
+  trustManifest?: TrustManifest;
   provenance: {
-    org_id: string;
-    registry_url: string;
+    orgId: string;
+    registryUrl: string;
     basis: 'agent_search' | 'single_agent_org' | 'federated';
   };
   score: number;
@@ -22,8 +26,8 @@ export interface AgentCandidate {
 /** A matching ARD finder the requester should query directly. */
 export interface FinderReferral {
   identifier: string;
-  display_name: string;
-  search_url: string;
+  displayName: string;
+  searchUrl: string;
 }
 
 /** GET /api/v1/agentic-search?q=&limit= — response envelope. */
@@ -33,9 +37,9 @@ export interface AgenticSearchResponse {
   candidates: AgentCandidate[];
   resolved: AgentCandidate | null;
   referrals: FinderReferral[];
-  orgs_queried: number;
-  orgs_unreachable: string[];
-  took_ms: number;
+  orgsQueried: number;
+  orgsUnreachable: string[];
+  tookMs: number;
 }
 
 export const agenticSearchQuerySchema = {
@@ -50,14 +54,14 @@ export const agenticSearchQuerySchema = {
 
 const AGENT_CANDIDATE_SCHEMA = {
   type: 'object',
-  required: ['identifier', 'display_name', 'type', 'url', 'description', 'tags', 'provenance', 'score'],
+  required: ['identifier', 'displayName', 'type', 'url', 'description', 'tags', 'provenance', 'score'],
   properties: {
-    identifier:   { type: 'string' },
-    display_name: { type: 'string' },
-    type:         { type: 'string' },
-    url:          { type: 'string' },
-    description:  { type: ['string', 'null'] },
-    tags:         { type: 'array', items: { type: 'string' } },
+    identifier:  { type: 'string' },
+    displayName: { type: 'string' },
+    type:        { type: 'string' },
+    url:         { type: 'string' },
+    description: { type: ['string', 'null'] },
+    tags:        { type: 'array', items: { type: 'string' } },
     publisher: {
       type: 'object',
       properties: {
@@ -66,14 +70,14 @@ const AGENT_CANDIDATE_SCHEMA = {
         identityType: { type: 'string' },
       },
     },
-    trust_manifest: TRUST_MANIFEST_SCHEMA,
+    trustManifest: TRUST_MANIFEST_SCHEMA,
     provenance: {
       type: 'object',
-      required: ['org_id', 'registry_url', 'basis'],
+      required: ['orgId', 'registryUrl', 'basis'],
       properties: {
-        org_id:       { type: 'string' },
-        registry_url: { type: 'string' },
-        basis:        { type: 'string', enum: ['agent_search', 'single_agent_org', 'federated'] },
+        orgId:       { type: 'string' },
+        registryUrl: { type: 'string' },
+        basis:       { type: 'string', enum: ['agent_search', 'single_agent_org', 'federated'] },
       },
     },
     score: { type: 'number' },
@@ -82,27 +86,27 @@ const AGENT_CANDIDATE_SCHEMA = {
 
 export const agenticSearchResponseSchema = {
   type: 'object',
-  required: ['query', 'count', 'candidates', 'resolved', 'referrals', 'orgs_queried', 'orgs_unreachable', 'took_ms'],
+  required: ['query', 'count', 'candidates', 'resolved', 'referrals', 'orgsQueried', 'orgsUnreachable', 'tookMs'],
   additionalProperties: false,
   properties: {
-    query:             { type: 'string' },
-    count:             { type: 'integer', minimum: 0 },
-    candidates:        { type: 'array', items: AGENT_CANDIDATE_SCHEMA },
-    resolved:          { anyOf: [AGENT_CANDIDATE_SCHEMA, { type: 'null' }] },
+    query:      { type: 'string' },
+    count:      { type: 'integer', minimum: 0 },
+    candidates: { type: 'array', items: AGENT_CANDIDATE_SCHEMA },
+    resolved:   { anyOf: [AGENT_CANDIDATE_SCHEMA, { type: 'null' }] },
     referrals: {
       type: 'array',
       items: {
         type: 'object',
-        required: ['identifier', 'display_name', 'search_url'],
+        required: ['identifier', 'displayName', 'searchUrl'],
         properties: {
-          identifier:   { type: 'string' },
-          display_name: { type: 'string' },
-          search_url:   { type: 'string' },
+          identifier:  { type: 'string' },
+          displayName: { type: 'string' },
+          searchUrl:   { type: 'string' },
         },
       },
     },
-    orgs_queried:      { type: 'integer', minimum: 0 },
-    orgs_unreachable:  { type: 'array', items: { type: 'string' } },
-    took_ms:           { type: 'integer', minimum: 0 },
+    orgsQueried:     { type: 'integer', minimum: 0 },
+    orgsUnreachable: { type: 'array', items: { type: 'string' } },
+    tookMs:          { type: 'integer', minimum: 0 },
   },
 } as const;

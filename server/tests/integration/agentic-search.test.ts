@@ -112,16 +112,88 @@ describe('GET /api/v1/agentic-search', () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=send+transactional+email' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    const ours = body.candidates.find((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-acme');
+    const ours = body.candidates.find((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-acme');
     // A bare registry identifier is qualified to the paper's urn:air: form,
     // anchored to the (verified) domain of the entry it was found through.
     expect(ours).toMatchObject({
       identifier: 'urn:air:ags-acme.example.com:agent:send-email',
-      display_name: 'Send Email Agent',
+      displayName: 'Send Email Agent',
       publisher: { identifier: 'ags-acme.example.com', identityType: 'dns' },
       url: 'https://ags-acme-registry.example.com/agents/send-email',
-      provenance: { org_id: 'ags-acme', basis: 'agent_search' },
+      provenance: { orgId: 'ags-acme', basis: 'agent_search' },
     });
+  });
+
+  it('searches inside a live catalog even when the catalog\'s own text does not mention the query', async () => {
+    await seedOrg({
+      orgId: 'ags-travel',
+      domain: 'ags-travel.example.com',
+      displayName: 'Travel Co',
+      description: 'Enterprise catalog for concierge tools',
+      tags: ['enterprise'],
+      registryUrl: 'https://ags-travel-registry.example.com',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!url.startsWith('https://ags-travel-registry.example.com/agents/search')) {
+        return new Response('not found', { status: 404 });
+      }
+      return new Response(JSON.stringify({
+        specVersion: '1.0',
+        entries: [{
+          identifier: 'flights', displayName: 'Flight Booking', mediaType: 'application/a2a-agent-card+json',
+          url: 'https://agents.ags-travel.example.com/flights', description: 'Search and book flights', tags: ['flights'],
+        }],
+      }), { status: 200 });
+    }));
+
+    const body = (await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=flight' })).json();
+
+    const ours = body.candidates.find((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-travel');
+    expect(ours).toMatchObject({
+      identifier: 'urn:air:ags-travel.example.com:agent:flights',
+      provenance: { orgId: 'ags-travel', basis: 'agent_search' },
+    });
+  });
+
+  it('drops results from a probed catalog that share no term with the query', async () => {
+    await seedOrg({
+      orgId: 'ags-hotels',
+      domain: 'ags-hotels.example.com',
+      displayName: 'Stay Co',
+      description: 'Enterprise catalog for concierge tools',
+      registryUrl: 'https://ags-hotels-registry.example.com',
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!url.startsWith('https://ags-hotels-registry.example.com/agents/search')) {
+        return new Response('not found', { status: 404 });
+      }
+      return new Response(JSON.stringify({
+        specVersion: '1.0',
+        entries: [{
+          identifier: 'hotels', displayName: 'Hotel Stays', mediaType: 'application/a2a-agent-card+json',
+          url: 'https://agents.ags-hotels.example.com/hotels', description: 'Reserve rooms', tags: ['hotels'],
+        }],
+      }), { status: 200 });
+    }));
+
+    const body = (await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=flight' })).json();
+
+    expect(body.candidates.some((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-hotels')).toBe(false);
+  });
+
+  it('does not report a probed catalog the query never matched as queried or unreachable', async () => {
+    await seedOrg({
+      orgId: 'ags-deadprobe',
+      domain: 'ags-deadprobe.example.com',
+      displayName: 'Dead Co',
+      description: 'Enterprise catalog for concierge tools',
+      registryUrl: 'https://ags-deadprobe-registry.example.com',
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 503 })));
+
+    const body = (await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=flight' })).json();
+
+    expect(body.orgsUnreachable).not.toContain('ags-deadprobe');
   });
 
   it('returns an SMB/personal org directly as a single candidate, without calling fetch', async () => {
@@ -148,11 +220,11 @@ describe('GET /api/v1/agentic-search', () => {
     const body = res.json();
     const ourFetchCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('host39.org/cards/moonbakery'));
     expect(ourFetchCalls).toEqual([]);
-    const ours = body.candidates.find((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-bakery');
+    const ours = body.candidates.find((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-bakery');
     expect(ours).toMatchObject({
-      display_name: 'Moonbakery',
+      displayName: 'Moonbakery',
       url: 'https://host39.org/cards/moonbakery',
-      provenance: { org_id: 'ags-bakery', basis: 'single_agent_org' },
+      provenance: { orgId: 'ags-bakery', basis: 'single_agent_org' },
     });
   });
 
@@ -180,7 +252,7 @@ describe('GET /api/v1/agentic-search', () => {
     }));
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=quantum+polishing' });
-    const ours = res.json().candidates.find((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-urn');
+    const ours = res.json().candidates.find((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-urn');
     expect(ours.identifier).toBe('urn:air:ags-urn.example.com:agent:polisher');
   });
 
@@ -202,15 +274,15 @@ describe('GET /api/v1/agentic-search', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('ags-finder'))).toEqual([]);
-    expect(body.candidates.some((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-finder')).toBe(false);
+    expect(body.candidates.some((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-finder')).toBe(false);
     expect(body.referrals).toContainEqual({
       identifier: 'urn:air:ags-finder.example.com:catalog:root',
-      display_name: 'Finder Directory',
-      search_url: 'https://directory.ags-finder.example.com/ard/search',
+      displayName: 'Finder Directory',
+      searchUrl: 'https://directory.ags-finder.example.com/ard/search',
     });
   });
 
-  it('excludes unreachable enterprise registries from candidates but still reports orgs_unreachable', async () => {
+  it('excludes unreachable enterprise registries from candidates but still reports orgsUnreachable', async () => {
     await seedOrg({
       orgId: 'ags-flaky',
       domain: 'ags-flaky.example.com',
@@ -225,8 +297,8 @@ describe('GET /api/v1/agentic-search', () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/agentic-search?q=widget+inventory' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.candidates.some((c: { provenance: { org_id: string } }) => c.provenance.org_id === 'ags-flaky')).toBe(false);
-    expect(body.orgs_unreachable).toContain('ags-flaky');
+    expect(body.candidates.some((c: { provenance: { orgId: string } }) => c.provenance.orgId === 'ags-flaky')).toBe(false);
+    expect(body.orgsUnreachable).toContain('ags-flaky');
   });
 
   it('with the SSRF guard on, never fetches a registry pointing at an internal address', async () => {
@@ -246,7 +318,7 @@ describe('GET /api/v1/agentic-search', () => {
 
       expect(res.statusCode).toBe(200);
       expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('127.0.0.1'))).toEqual([]);
-      expect(res.json().orgs_unreachable).toContain('ags-internal');
+      expect(res.json().orgsUnreachable).toContain('ags-internal');
     } finally {
       process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] = 'true';
     }
@@ -259,9 +331,9 @@ describe('GET /api/v1/agentic-search', () => {
     expect(typeof body.query).toBe('string');
     expect(typeof body.count).toBe('number');
     expect(Array.isArray(body.candidates)).toBe(true);
-    expect(typeof body.orgs_queried).toBe('number');
-    expect(Array.isArray(body.orgs_unreachable)).toBe(true);
+    expect(typeof body.orgsQueried).toBe('number');
+    expect(Array.isArray(body.orgsUnreachable)).toBe(true);
     expect(Array.isArray(body.referrals)).toBe(true);
-    expect(typeof body.took_ms).toBe('number');
+    expect(typeof body.tookMs).toBe('number');
   });
 });

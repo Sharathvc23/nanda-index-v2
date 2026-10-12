@@ -86,14 +86,14 @@ export async function maybeFederateOut(
       .filter((r) => !seen.has(r.identifier))
       .map((r) => ({
         identifier: r.identifier,
-        display_name: r.displayName,
+        displayName: r.displayName,
         type: r.type,
         url: r.url,
         description: r.description ?? null,
         tags: r.tags ?? [],
         provenance: {
-          org_id: cfg.upstreamName,
-          registry_url: cfg.upstreamUrl,
+          orgId: cfg.upstreamName,
+          registryUrl: cfg.upstreamUrl,
           basis: 'federated' as const,
         },
         score: 0,

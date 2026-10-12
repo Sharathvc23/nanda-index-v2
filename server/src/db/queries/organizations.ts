@@ -1,6 +1,9 @@
 import type postgres from 'postgres';
 import { getSql } from '../client.js';
-import { DEFAULT_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
+import { DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
+
+/** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
+const TEXT_OID = 25;
 import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
@@ -500,6 +503,53 @@ export async function rankOrganizationsForQuery(
     .filter((o) => o.registryUrl != null && o.mediaType !== POINTER_ONLY_MEDIA_TYPE)
     .slice(0, limit)
     .map((o) => ({ ...o, rank: 0 }));
+}
+
+/**
+ * Live enterprise catalogs that agentic search should also look inside even
+ * though their own record didn't match the query: ranking only sees a
+ * catalog's name, description and tags, never the agents it lists (a travel
+ * catalog described as "booking agents" still holds the flights agent).
+ * Most recently updated first, so beyond `limit` catalogs the least recently
+ * updated ones are not probed; excludes the orgs already ranked.
+ */
+export async function listCatalogsToProbe(
+  excludeOrgIds: readonly string[],
+  limit: number,
+): Promise<RankedOrganization[]> {
+  if (limit <= 0) return [];
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE status = 'active'
+      AND registry_url IS NOT NULL
+      AND media_type = ${ENTERPRISE_MEDIA_TYPE}
+      AND NOT (org_id = ANY(${sql.array([...excludeOrgIds], TEXT_OID)}))
+    ORDER BY updated_at DESC
+    LIMIT ${limit}
+  `;
+  return rows.map((o) => ({ ...o, rank: 0 }));
+}
+
+/** Active entries with no representative queries yet, optionally limited to an org_id prefix. */
+export async function listActiveWithoutRepresentativeQueries(orgIdPrefix = ''): Promise<Organization[]> {
+  const sql = getSql();
+  return sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE status = 'active'
+      AND cardinality(representative_queries) = 0
+      AND starts_with(org_id, ${orgIdPrefix})
+    ORDER BY org_id ASC
+  `;
+}
+
+/** Stores an entry's representative queries; search_vector is regenerated from them. */
+export async function setRepresentativeQueries(orgId: string, queries: readonly string[]): Promise<void> {
+  const sql = getSql();
+  await sql`
+    UPDATE organizations SET representative_queries = ${sql.array([...queries])}
+    WHERE org_id = ${orgId}
+  `;
 }
 
 export interface PagedOrgsResult {

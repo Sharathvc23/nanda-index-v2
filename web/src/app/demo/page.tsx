@@ -183,25 +183,25 @@ export default function DemoPage() {
     }
 
     // Hop 2 — Registry Server
-    const { registry_url } = indexResult.index_record;
-    if (!registry_url) {
+    const { url: entryUrl } = indexResult.entry;
+    if (!entryUrl) {
       setHop2({ status: "error", message: "This entry has no URL to follow (inline data or custom discovery)." });
       setResolving(false);
       return;
     }
-    const mediaType = indexResult.index_record.media_type;
+    const mediaType = indexResult.entry.type;
     const isDirectCard = mediaType === "application/a2a-agent-card+json" ||
       mediaType === "application/mcp-server-card+json" ||
       mediaType === "application/agentskill+zip";
     const h2url = isDirectCard
-      ? registry_url
-      : `${registry_url.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;
+      ? entryUrl
+      : `${entryUrl.replace(/\/+$/, "")}/agents/${indexResult.identifier}`;
     setHop2Url(h2url);
     setHop2({ status: "loading" });
 
     let catalogEntry: CatalogEntry;
     try {
-      catalogEntry = await fetchAgentRecord(registry_url, indexResult.identifier, mediaType);
+      catalogEntry = await fetchAgentRecord(entryUrl, indexResult.identifier, mediaType);
       setHop2({ status: "ok", data: catalogEntry });
     } catch (err) {
       setHop2({

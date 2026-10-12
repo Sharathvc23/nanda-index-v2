@@ -1,5 +1,5 @@
-import { rankOrganizationsForQuery, type RankedOrganization } from '../db/queries/organizations.js';
-import { fanOutAgentSearch, type FanoutCandidate } from './registryFanout.js';
+import { listCatalogsToProbe, rankOrganizationsForQuery, type RankedOrganization } from '../db/queries/organizations.js';
+import { fanOutAgentSearch, type FanoutCandidate, type RemoteCatalogEntry } from './registryFanout.js';
 import { toArdType } from '../lib/ardMapping.js';
 import { buildAirUrn } from '../lib/airUrn.js';
 import type { UrlGuard } from '../lib/outboundUrl.js';
@@ -9,9 +9,17 @@ export interface AgenticSearchOptions {
   topOrgs?: number;
   perOrgLimit?: number;
   limit?: number;
+  /** Unmatched live catalogs to look inside as well (see listCatalogsToProbe). */
+  catalogProbeLimit?: number;
   /** SSRF check for registry fan-out (see registryFanout.ts). */
   urlGuard?: UrlGuard;
 }
+
+/** Query words shorter than this ("a", "to") are too common to show a probed result is on-topic. */
+const MIN_CONTENT_TERM_LENGTH = 3;
+
+/** Probed catalogs get less time than matched ones — they are a best-effort extra. */
+const PROBE_TIMEOUT_MS = 1200;
 
 function tokenize(query: string): string[] {
   return query.toLowerCase().split(/\W+/).filter(Boolean);
@@ -23,6 +31,11 @@ function termOverlapScore(text: string, queryTerms: string[]): number {
   const lower = text.toLowerCase();
   const matched = queryTerms.filter((term) => lower.includes(term)).length;
   return matched / queryTerms.length;
+}
+
+/** The searchable text of a registry entry: name, description and tags. */
+function entryText(entry: RemoteCatalogEntry): string {
+  return `${entry.displayName} ${entry.description ?? ''} ${(entry.tags ?? []).join(' ')}`;
 }
 
 /**
@@ -44,8 +57,8 @@ function qualifyIdentifier(raw: string, org: RankedOrganization): string {
 function toFinderReferral(org: RankedOrganization): FinderReferral {
   return {
     identifier: org.identifier,
-    display_name: org.displayName,
-    search_url: `${org.registryUrl!.replace(/\/+$/, '')}/search`,
+    displayName: org.displayName,
+    searchUrl: `${org.registryUrl!.replace(/\/+$/, '')}/search`,
   };
 }
 
@@ -55,21 +68,20 @@ function toAgentCandidate(
   maxOrgRank: number,
 ): AgentCandidate {
   const orgScore = maxOrgRank > 0 ? org.rank / maxOrgRank : 0;
-  const text = `${entry.displayName} ${entry.description ?? ''} ${(entry.tags ?? []).join(' ')}`;
-  const overlapScore = termOverlapScore(text, queryTerms);
+  const overlapScore = termOverlapScore(entryText(entry), queryTerms);
 
   return {
     identifier: qualifyIdentifier(entry.identifier, org),
-    display_name: entry.displayName,
+    displayName: entry.displayName,
     type: toArdType(entry.mediaType),
     url: entry.url,
     description: entry.description ?? null,
     tags: entry.tags ?? [],
     publisher: org.publisher ?? undefined,
-    trust_manifest: org.trustManifest ?? undefined,
+    trustManifest: org.trustManifest ?? undefined,
     provenance: {
-      org_id: org.orgId,
-      registry_url: org.registryUrl!,
+      orgId: org.orgId,
+      registryUrl: org.registryUrl!,
       basis,
     },
     score: orgScore * 0.6 + overlapScore * 0.4,
@@ -78,10 +90,10 @@ function toAgentCandidate(
 
 /**
  * Core agentic-search pipeline: rank candidate orgs locally (Postgres FTS),
- * fan out live to expand each into agent-level candidates (branching by
- * media_type — see registryFanout.ts), then score and merge into one flat,
- * ranked list. Backs both /api/v1/agentic-search (NANDA-native) and
- * /api/ard/search (ARD-compliant) — those two only differ in wire casing.
+ * add live catalogs that didn't match on their own text, fan out live to
+ * expand each into agent-level candidates (branching by media_type — see
+ * registryFanout.ts), then score and merge into one flat, ranked list. Backs
+ * both /api/v1/agentic-search and /api/ard/search (ARD-compliant).
  */
 export async function agenticSearch(
   query: string,
@@ -90,19 +102,29 @@ export async function agenticSearch(
   const topOrgs = opts.topOrgs ?? 10;
   const perOrgLimit = opts.perOrgLimit ?? 10;
   const limit = opts.limit ?? 20;
+  const catalogProbeLimit = opts.catalogProbeLimit ?? 10;
   const start = Date.now();
 
   const rankedOrgs = await rankOrganizationsForQuery(query, topOrgs);
   const maxOrgRank = rankedOrgs.reduce((max, o) => Math.max(max, o.rank), 0);
+  const probedOrgs = await listCatalogsToProbe(rankedOrgs.map((o) => o.orgId), catalogProbeLimit);
 
-  const { candidates: fanoutCandidates, unreachable, finders } = await fanOutAgentSearch(
-    rankedOrgs,
-    query,
-    { perOrgLimit, urlGuard: opts.urlGuard },
-  );
+  // Probes run alongside the ranked fan-out with a shorter timeout, so a slow
+  // catalog the query never matched can't stretch the response. Their failures
+  // aren't reported: the query never asked for them.
+  const [ranked, probed] = await Promise.all([
+    fanOutAgentSearch(rankedOrgs, query, { perOrgLimit, urlGuard: opts.urlGuard }),
+    fanOutAgentSearch(probedOrgs, query, {
+      perOrgLimit, urlGuard: opts.urlGuard, timeoutMs: PROBE_TIMEOUT_MS, concurrency: catalogProbeLimit,
+    }),
+  ]);
 
   const queryTerms = tokenize(query);
-  const scored = fanoutCandidates
+  const contentTerms = queryTerms.filter((t) => t.length >= MIN_CONTENT_TERM_LENGTH);
+  // A probed catalog was not matched on its own text, so keep only the agents
+  // it returned that actually share a content word with the query.
+  const onTopicProbed = probed.candidates.filter((c) => termOverlapScore(entryText(c.entry), contentTerms) > 0);
+  const scored = [...ranked.candidates, ...onTopicProbed]
     .map((c) => toAgentCandidate(c, queryTerms, maxOrgRank))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
@@ -112,9 +134,9 @@ export async function agenticSearch(
     count: scored.length,
     candidates: scored,
     resolved: scored[0] ?? null,
-    referrals: finders.map(toFinderReferral),
-    orgs_queried: rankedOrgs.length,
-    orgs_unreachable: unreachable,
-    took_ms: Date.now() - start,
+    referrals: ranked.finders.map(toFinderReferral),
+    orgsQueried: rankedOrgs.length,
+    orgsUnreachable: ranked.unreachable,
+    tookMs: Date.now() - start,
   };
 }

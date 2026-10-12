@@ -78,7 +78,7 @@ function IndexRecordCard({ org }: { org: IndexRecord }) {
 }
 
 export default function QueryPage() {
-  const [mode, setMode] = useState<Mode>("search");
+  const [mode, setMode] = useState<Mode>("agentic");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
@@ -104,14 +104,14 @@ export default function QueryPage() {
         const indexData = await resolveAgent(q);
         let agent = null;
         let agentError: string | undefined;
-        if (!indexData.index_record.registry_url) {
+        if (!indexData.entry.url) {
           agentError = "This entry has no URL to follow (inline data or custom discovery).";
         } else {
           try {
             agent = await fetchAgentRecord(
-              indexData.index_record.registry_url,
+              indexData.entry.url,
               indexData.identifier,
-              indexData.index_record.media_type,
+              indexData.entry.type,
             );
           } catch (err) {
             agentError = err instanceof ApiError
@@ -255,12 +255,12 @@ export default function QueryPage() {
                 ? "No candidates"
                 : `${result.agentic.count} candidate${result.agentic.count !== 1 ? "s" : ""} for "${result.agentic.query}"`}
               <span className="ml-2 normal-case text-slate-400">
-                ({result.agentic.orgs_queried} org{result.agentic.orgs_queried !== 1 ? "s" : ""} queried, {result.agentic.took_ms}ms)
+                ({result.agentic.orgsQueried} org{result.agentic.orgsQueried !== 1 ? "s" : ""} queried, {result.agentic.tookMs}ms)
               </span>
             </p>
-            {result.agentic.orgs_unreachable.length > 0 && (
+            {result.agentic.orgsUnreachable.length > 0 && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                Unreachable: {result.agentic.orgs_unreachable.join(", ")}
+                Unreachable: {result.agentic.orgsUnreachable.join(", ")}
               </div>
             )}
             {result.agentic.candidates.length === 0 ? (
@@ -295,7 +295,7 @@ export default function QueryPage() {
               <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
                 Hop 1: NANDA Index
               </p>
-              <IndexRecordCard org={result.resolve.index_record} />
+              <IndexEntryCard entry={result.resolve.entry} />
             </div>
 
             {/* Hop 2: Agent record from the registry server */}

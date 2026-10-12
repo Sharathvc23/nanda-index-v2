@@ -1,4 +1,4 @@
-import { findByDomain, findByIdentifier, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByDomain, findByIdentifier, toIndexEntry, type Organization } from '../db/queries/organizations.js';
 import type { ParsedAirUrn } from '../lib/airUrn.js';
 import { CATALOG_MEDIA_TYPES } from '../lib/mediaTypes.js';
 import type { ResolveMatch, ResolveResponse } from '../types/api/resolve.js';
@@ -51,6 +51,6 @@ export async function resolveIdentifier(parsed: ParsedAirUrn): Promise<ResolveRe
     locator: parsed.urn,
     identifier: parsed.shortName,
     match: resolved.match,
-    index_record: toIndexRecord(resolved.org),
+    entry: toIndexEntry(resolved.org),
   };
 }

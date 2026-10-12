@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
+import math
 import queue
 import threading
 import threading as _threading
@@ -17,15 +19,21 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-from . import authority, capabilities, config, renewal
+from . import authority, capabilities, config, lastrun, renewal
 from .card import AGENT_CARD_MEDIA_TYPE, build_card
 from .identity import Identity, ensure_registered, load_or_create
 from .lunch import VIA_INDEX_V2, arrange
 from .narration import PHASES, caption_for, phase_for
+from .ratelimit import RunLimiter, client_key
 from .receipts import chain_link
 from .references import probe_all
 
 __all__ = ["build_app"]
+
+log = logging.getLogger(__name__)
+
+#: The window the per-visitor run limit counts over.
+RUN_LIMIT_WINDOW_SECONDS = 3600.0
 
 #: JSON-RPC codes, reused from the estate's vocabulary rather than invented, so a
 #: client that already talks to the venue reads these without a second table.
@@ -67,11 +75,38 @@ def build_app(identity: Identity | None = None) -> Starlette:
     # callers can overlap. The lock is around the *run*, not just the write: two
     # concurrent runs would race for the same venue slot and one would get a
     # refusal caused by the other, which is a confusing thing to put in a receipt.
-    state: dict[str, Any] = {"last": None, "refs": None, "vocab": None}
+    # The last run is also kept on disk, beside the key, so a redeploy does not
+    # leave the next visitor nothing to watch but a live run.
+    last_path = lastrun.default_path()
+    state: dict[str, Any] = {"last": lastrun.load(last_path), "refs": None, "vocab": None}
+    limiter = RunLimiter(config.run_limit_per_hour(), RUN_LIMIT_WINDOW_SECONDS)
+    proxied = config.behind_proxy()
     #: Created here, not in the lifespan, so ``started_at`` is the process's
     #: own clock and /healthz can answer before the first tick is due.
     heartbeat = renewal.Heartbeat()
     lock = threading.Lock()
+
+    def _remember(payload: dict[str, Any]) -> None:
+        state["last"] = payload
+        try:
+            lastrun.save(payload, last_path)
+        except OSError as exc:
+            # The run happened and its chain is in memory; losing the replay on
+            # the next restart is worth a warning, not a failed run.
+            log.warning("could not save the last run to %s: %s", last_path, exc)
+
+    def _visitor(request: Request) -> str:
+        peer = request.client.host if request.client else "unknown"
+        return client_key(peer, request.headers.get("x-forwarded-for"), behind_proxy=proxied)
+
+    def _limit_message(wait: float) -> str:
+        n = limiter.max_runs
+        minutes = max(1, math.ceil(wait / 60))
+        return (
+            f"You have used your {n} live run{'s' if n != 1 else ''} for this hour. Each one sends "
+            "real messages to two companies' agents and holds a real table, so they are rationed. "
+            f"Try again in {minutes} minute{'s' if minutes != 1 else ''} — or watch the last run."
+        )
 
     async def agent_card(_: Request) -> JSONResponse:
         return JSONResponse(card, media_type=AGENT_CARD_MEDIA_TYPE)
@@ -101,7 +136,7 @@ def build_app(identity: Identity | None = None) -> Starlette:
             index_v3_url=config.index_v3_url(),
         )
         payload = {"summary": plan.summary(), "entries": [e.to_dict() for e in plan.chain.entries]}
-        state["last"] = payload
+        _remember(payload)
         return payload
 
     async def a2a(request: Request) -> JSONResponse:
@@ -138,8 +173,15 @@ def build_app(identity: Identity | None = None) -> Starlette:
             result = state["last"] or {"summary": None, "entries": [], "note": "no run yet"}
             result = {"skill": skill, "kind": "receipt-chain", **result}
         elif skill == "concierge.arrange_meal":
+            visitor = _visitor(request)
+            if not limiter.would_allow(visitor):
+                return _error(rpc_id, INTERNAL_ERROR, _limit_message(limiter.try_acquire(visitor)[1]))
             if not lock.acquire(blocking=False):
                 return _error(rpc_id, INTERNAL_ERROR, "a run is already in progress; try concierge.last_run")
+            allowed, wait = limiter.try_acquire(visitor)
+            if not allowed:
+                lock.release()
+                return _error(rpc_id, INTERNAL_ERROR, _limit_message(wait))
             try:
                 result = {"skill": skill, "kind": "receipt-chain", **_arrange()}
             except Exception as exc:  # noqa: BLE001 - reported in the envelope, never as a 500
@@ -227,12 +269,26 @@ def build_app(identity: Identity | None = None) -> Starlette:
             "entry": raw,
         }
 
-    async def ui_stream(_: Request) -> StreamingResponse:
+    async def ui_stream(request: Request) -> StreamingResponse:
         """Server-sent events: one per step, as it completes."""
+        visitor = _visitor(request)
 
         def generate():
+            # Over-limit visitors are turned away before the lock, so retrying
+            # cannot make a run look "in progress" to anyone else.
+            if not limiter.would_allow(visitor):
+                wait = limiter.try_acquire(visitor)[1]
+                yield _sse("error", {"message": _limit_message(wait), "limited": True})
+                return
             if not lock.acquire(blocking=False):
                 yield _sse("error", {"message": "A run is already in progress. Open the replay instead."})
+                return
+            # Counted only once the run can actually start: a visitor who found
+            # another run in progress has not used anything.
+            allowed, wait = limiter.try_acquire(visitor)
+            if not allowed:
+                lock.release()
+                yield _sse("error", {"message": _limit_message(wait), "limited": True})
                 return
 
             events: queue.Queue = queue.Queue()
@@ -254,7 +310,7 @@ def build_app(identity: Identity | None = None) -> Starlette:
                         "summary": plan.summary(),
                         "entries": [e.to_dict() for e in plan.chain.entries],
                     }
-                    state["last"] = payload
+                    _remember(payload)
                     outcome["summary"] = plan.summary()
                 except Exception as exc:  # noqa: BLE001 - reported to the page, not a 500
                     outcome["error"] = f"{type(exc).__name__}: {exc}"[:400]
@@ -325,6 +381,7 @@ def build_app(identity: Identity | None = None) -> Starlette:
                     for p in PHASES
                 ],
                 "agent": {"did": me.did, "urn": me.urn},
+                "run_limit": {"per_hour": limiter.max_runs},
             }
         )
 

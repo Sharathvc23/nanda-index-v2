@@ -414,7 +414,7 @@ class _Plan:
 
 
 @pytest.fixture(scope="module")
-def ui_server(request):
+def ui_server(request, tmp_path_factory):
     """Serve the real app on a loopback port, with the estate stubbed out."""
     pytest.importorskip("playwright", reason="playwright is not installed")
     import uvicorn
@@ -506,6 +506,9 @@ def ui_server(request):
             return matches
 
     mp = pytest.MonkeyPatch()
+    # The last run is kept on disk; this server's runs go to a file of its own,
+    # never to a .concierge directory in the working tree.
+    mp.setenv("CONCIERGE_LAST_RUN", str(tmp_path_factory.mktemp("ui") / "last-run.json"))
     mp.setattr(server_mod, "arrange", fake_arrange)
     mp.setattr(server_mod, "probe_all", lambda *a, **k: refs)
     mp.setattr(capabilities, "search", lambda *a, **k: _Result())

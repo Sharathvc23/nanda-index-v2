@@ -15,7 +15,10 @@ from concierge.server import build_app
 
 
 @pytest.fixture
-def client(seed, monkeypatch):
+def client(seed, monkeypatch, tmp_path):
+    # The last run is kept on disk now; each test gets its own file, so one
+    # test's run cannot appear as another's "last run".
+    monkeypatch.setenv("CONCIERGE_LAST_RUN", str(tmp_path / "last-run.json"))
     me = Identity(agent_id="concierge", seed=seed, did=did_of(seed), subject_key=subject_key_of(seed))
     monkeypatch.setattr(server_mod.config, "service_url", lambda: "https://concierge.test/")
     monkeypatch.setattr(
@@ -560,3 +563,92 @@ def test_the_authority_route_serves_both_artifacts_whole(client):
     assert body["grant_receipt"]["signature"], "the host's receipt is served too"
     assert body["summary"]["grant_id"] == body["grant"]["grant_id"]
     assert body["summary"]["revocable"] is False
+
+
+# ── what a public deployment needs: a replay that survives, a bounded run ────
+
+
+def _stub_run(monkeypatch, me):
+    entries = _real_entries(me.seed, [("discover.organisation", "Matched 1 organisation", ())])
+
+    def fake_arrange(*_a, on_step=None, **_k):
+        plan = _FakePlan(entries)
+        for entry in plan.chain.entries:
+            if on_step:
+                on_step(entry)
+        return plan
+
+    monkeypatch.setattr(server_mod, "arrange", fake_arrange)
+
+
+def test_the_last_run_survives_a_restart(client, monkeypatch):
+    """The page opens on the last run. Kept only in memory, every redeploy left
+    the first visitor nothing to watch but a live run."""
+    c, me = client
+    _stub_run(monkeypatch, me)
+    _events(c.get("/ui/stream").text)
+
+    restarted = TestClient(build_app(me))
+    steps = restarted.get("/ui/last").json()["steps"]
+    assert [s["step"] for s in steps] == ["discover.organisation"]
+
+
+def test_the_stream_refuses_a_visitor_over_the_limit_and_says_so(client, monkeypatch):
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "1")
+    _stub_run(monkeypatch, me)
+    limited = TestClient(build_app(me))
+
+    assert _events(limited.get("/ui/stream").text)[-1][0] == "done"
+    refused = _events(limited.get("/ui/stream").text)
+    assert [k for k, _ in refused] == ["error"]
+    assert refused[0][1]["limited"] is True
+    assert "1 live run" in refused[0][1]["message"]
+
+
+def test_a_refused_stream_does_not_hold_the_run_lock(client, monkeypatch):
+    """A visitor turned away must not leave the next visitor locked out."""
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "1")
+    monkeypatch.setenv("CONCIERGE_BEHIND_PROXY", "1")
+    _stub_run(monkeypatch, me)
+    limited = TestClient(build_app(me))
+    first = {"X-Forwarded-For": "198.51.100.1"}
+
+    limited.get("/ui/stream", headers=first)
+    limited.get("/ui/stream", headers=first)  # refused
+    other = _events(limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.2"}).text)
+    assert other[-1][0] == "done"
+
+
+def test_the_a2a_run_is_limited_the_same_way(client, monkeypatch):
+    """The page is not the only way in: arrange_meal over A2A books the same table."""
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "1")
+    _stub_run(monkeypatch, me)
+    limited = TestClient(build_app(me))
+
+    assert "result" in _rpc(limited, {"skill": "concierge.arrange_meal"}).json()
+    body = _rpc(limited, {"skill": "concierge.arrange_meal"}).json()
+    assert body["error"]["code"] == -32603
+    assert "live run" in body["error"]["message"]
+
+
+def test_forwarded_for_is_ignored_unless_a_proxy_is_declared(client, monkeypatch):
+    """Directly reachable, the header is the caller's to invent: rotating it must
+    not buy a fresh allowance."""
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "1")
+    monkeypatch.delenv("CONCIERGE_BEHIND_PROXY", raising=False)
+    _stub_run(monkeypatch, me)
+    limited = TestClient(build_app(me))
+
+    limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.1"})
+    again = _events(limited.get("/ui/stream", headers={"X-Forwarded-For": "198.51.100.2"}).text)
+    assert again[0][0] == "error"
+
+
+def test_the_page_is_told_the_limit_it_will_meet(client, monkeypatch):
+    c, me = client
+    monkeypatch.setenv("RUN_LIMIT_PER_HOUR", "3")
+    assert TestClient(build_app(me)).get("/ui/config").json()["run_limit"] == {"per_hour": 3}

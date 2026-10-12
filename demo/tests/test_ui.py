@@ -154,11 +154,17 @@ def test_the_refusal_step_is_rendered_and_marked_as_refused(page):
     )
 
 
-def test_a_replay_renders_without_running_again(page):
-    """A reload must show the evidence without booking a second table."""
+def test_a_reload_replays_the_last_run_without_running_again(page):
+    """A reload must show the evidence without booking a second table.
+
+    On a public page it opens on the last run by itself, so a visitor sees what
+    the demo does before deciding to spend a live run on it.
+    """
     _run_once(page)
     page.reload(wait_until="networkidle")
-    assert page.locator("#p-plain li.step").count() == 0, "a fresh load should be empty"
+    page.wait_for_function("() => document.querySelectorAll('#p-plain li.step').length >= 8", timeout=15000)
+    assert not page.is_disabled("#run"), "showing the replay must not start a run"
+    assert "Replaying the last run" in page.inner_text("#status-plain")
     page.click("#replay")
     page.wait_for_selector("#p-plain li.step", timeout=15000)
     assert page.locator("#p-plain li.step").count() >= 8

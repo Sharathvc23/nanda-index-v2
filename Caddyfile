@@ -4,6 +4,20 @@ nandaindex.org {
 		file_server
 	}
 
+	# The concierge demo (demo/). It is an agent as well as a page: its card is
+	# /demo/.well-known/agent-card.json and it answers A2A on POST /demo/, so the
+	# prefix is stripped and everything under it goes to the demo service.
+	# GET /demo and GET /demo/ land on the page; POST /demo/ stays A2A.
+	redir /demo /demo/ui/ 302
+	@demo_page {
+		path /demo/
+		method GET HEAD
+	}
+	redir @demo_page /demo/ui/ 302
+	handle_path /demo/* {
+		reverse_proxy demo:8080
+	}
+
 	handle {
 		reverse_proxy web:3000
 	}

@@ -79,6 +79,21 @@ def index_v3_url() -> str:
     return index_url()
 
 
+def run_limit_per_hour() -> int:
+    """Live runs one visitor may start per hour. Unset or 0 means no limit, which
+    suits a workstation; a public deployment sets it (see docker-compose)."""
+    raw = os.environ.get("RUN_LIMIT_PER_HOUR", "").strip()
+    try:
+        return max(int(raw), 0) if raw else 0
+    except ValueError:
+        return 0
+
+
+def behind_proxy() -> bool:
+    """Whether a proxy we run sits in front and appends X-Forwarded-For."""
+    return os.environ.get("CONCIERGE_BEHIND_PROXY", "").strip().lower() in ("1", "true", "yes")
+
+
 def venue_url() -> str:
     return os.environ.get("VENUE_URL", "https://nanda-demo-venue-production.up.railway.app")
 

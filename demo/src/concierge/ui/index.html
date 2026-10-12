@@ -199,6 +199,65 @@ dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .blk summary .id{color:var(--muted);font-size:11.5px;flex:0 0 auto}
 .blk pre{margin:0;padding:14px;overflow-x:auto;font-family:var(--mono);font-size:11.5px;
          line-height:1.65;background:var(--bg);border-top:1px solid var(--rule-soft)}
+/* step-by-step player: one step at a time, on a map of who is talking to whom.
+   Same rule as the rest of the sheet — status by shape and words, never hue. */
+.stage{border:1px solid var(--rule);margin:0 0 30px;padding:18px 20px 20px}
+.stage-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.stage-head h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+               color:var(--faint)}
+.stage-ctl{display:flex;gap:6px}
+.stage-ctl button{padding:8px 13px;font-size:13px}
+ol.track{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:5px;min-height:28px}
+ol.track li.gap{width:10px}
+ol.track button{width:28px;height:28px;padding:0;font:500 11.5px/1 var(--mono);background:var(--bg);
+                color:var(--faint);border:1px dashed var(--rule)}
+ol.track button.seen{color:var(--ink);border:1px solid var(--rule)}
+ol.track button.refused{border:2px solid var(--ink)}
+ol.track button.on{background:var(--ink);color:#fff;border:1px solid var(--ink)}
+.stage-body{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;margin:16px 0 0}
+.map svg{width:100%;height:auto;display:block}
+.map .edge{fill:none;stroke:var(--rule);stroke-width:1.2}
+.map .edge.used{stroke:var(--muted)}
+.map .edge.on{stroke:var(--ink);stroke-width:2.4;stroke-dasharray:7 5;animation:flow .9s linear infinite}
+.map .node rect{fill:var(--bg);stroke:var(--rule);stroke-width:1}
+.map .node text{font-family:var(--sans);font-size:14px;fill:var(--faint)}
+.map .node text.sub{font-family:var(--mono);font-size:10.5px}
+.map .node.used rect{stroke:var(--ink)}
+.map .node.used text{fill:var(--ink)}
+.map .node.used text.sub{fill:var(--muted)}
+.map .node.on rect{fill:var(--ink);stroke:var(--ink)}
+.map .node.on text{fill:#fff}
+.map .node.on.refused rect{fill:var(--bg);stroke-width:3;stroke-dasharray:5 3}
+.map .node.on.refused text{fill:var(--ink)}
+.map .grp{font:600 10.5px var(--sans);letter-spacing:.09em;fill:var(--faint);text-transform:uppercase}
+.map .packet{fill:var(--ink)}
+.map .packet.back{fill:var(--bg);stroke:var(--ink);stroke-width:2}
+@keyframes flow{to{stroke-dashoffset:-24}}
+@media (prefers-reduced-motion:reduce){.map .edge.on{animation:none}}
+.card{min-width:0}
+.card .c-meta{margin:0;font:500 11px/1.5 var(--mono);color:var(--faint);letter-spacing:.04em}
+.card h4{margin:6px 0 8px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.card .c-route{margin:0 0 10px;font-size:13.5px;color:var(--muted)}
+.card .c-route b{color:var(--ink);font-weight:600}
+.card .c-plain{margin:0 0 12px;font-size:14.5px;color:var(--muted)}
+.card .c-io{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;margin:0 0 12px;
+            font-size:13px}
+.card .c-io dt{color:var(--faint)}
+.card .c-io dd{margin:0;font-family:var(--mono);font-size:12px;word-break:break-all}
+.card .c-io .sec{grid-column:1/-1;font:600 10.5px/1 var(--sans);letter-spacing:.09em;
+                 text-transform:uppercase;color:var(--faint);margin:6px 0 0}
+.card .c-out{margin:0;font-family:var(--mono);font-size:12.5px;background:var(--wash);
+             border-left:2px solid var(--rule);padding:8px 11px;word-break:break-word}
+.card .c-out.refused{border-left:4px solid var(--ink)}
+.card .c-verdict{display:inline-block;font:600 10.5px/1 var(--sans);letter-spacing:.08em;
+                 text-transform:uppercase;border:2px solid var(--ink);padding:4px 7px;margin:0 0 8px}
+.card .c-why{margin:12px 0 0;font-size:13px;color:var(--ink);border-left:2px solid var(--ink);
+             padding:2px 0 2px 11px}
+.card .c-wait{margin:12px 0 0;font-size:12.5px;color:var(--faint)}
+li.step{cursor:pointer;transition:opacity .2s}
+li.step.ahead{opacity:.32}
+li.step.now .n{background:var(--ink);color:#fff;border-color:var(--ink)}
+@media(max-width:760px){.stage-body{grid-template-columns:1fr}.map{display:none}}
 .empty{color:var(--faint);font-size:14px;padding:22px 0}
 .status{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 18px;min-height:17px}
 @media(max-width:560px){
@@ -225,7 +284,7 @@ dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
       <button id="run">Run this request</button>
       <button id="replay" class="ghost">Show the last run</button>
     </div>
-    <p class="note">This books a real table at the demo restaurant and writes to both companies&rsquo;
+    <p class="note" id="run-note">This books a real table at the demo restaurant and writes to both companies&rsquo;
        agents. It takes about a minute.</p>
   </section>
 
@@ -241,6 +300,21 @@ dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
   </nav>
 
   <section id="p-plain" class="panel on" role="tabpanel" aria-labelledby="t-plain">
+    <section class="stage" aria-labelledby="stage-title">
+      <div class="stage-head">
+        <h3 id="stage-title">Step by step</h3>
+        <div class="stage-ctl">
+          <button id="st-prev" class="ghost" type="button" disabled>&larr; Back</button>
+          <button id="st-play" class="ghost" type="button" disabled>Pause</button>
+          <button id="st-next" class="ghost" type="button" disabled>Next &rarr;</button>
+        </div>
+      </div>
+      <ol class="track" id="st-track" aria-label="Steps so far"></ol>
+      <div class="stage-body">
+        <div class="map" id="st-map" aria-hidden="true"></div>
+        <article class="card" id="st-card" aria-live="polite"></article>
+      </div>
+    </section>
     <p class="status" id="status-plain" role="status" aria-live="polite">Press &ldquo;Run this request&rdquo; to start.</p>
     <div id="phases"></div>
     <div id="summary"></div>
@@ -495,6 +569,309 @@ function esc(t) {
 }
 function setStatus(t) { $('status-plain').textContent = t; $('status-tech').textContent = t; }
 
+/* ── step-by-step player ────────────────────────────────────────────────────
+   A run lands thirteen steps in a few seconds, faster than anyone can read.
+   Steps are kept as they arrive and SHOWN one at a time, on a map of who the
+   concierge is talking to, until the reader catches up. The full list below
+   stays complete; the player only decides which entry is "now". */
+const DWELL_MS = 4500;
+const payloadOf = s => (s.entry && s.entry.action && s.entry.action.machine_payload) || {};
+const partyOf = s => (s.entry && s.entry.action && s.entry.action.counterparty_label) || '';
+
+let NODES = [];
+const player = { steps: [], at: -1, playing: true, timer: null, finished: false };
+
+function buildNodes(cfg) {
+  const host = u => String(u || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const guests = cfg.guests || [];
+  NODES = [
+    { key: 'index:public', group: 'Directories', label: 'NANDA Index', sub: host(cfg.index) },
+    { key: 'index:second', group: 'Directories', label: 'Second index', sub: 'name → address' },
+    ...guests.map(g => ({ key: 'org:' + g.agent.split('-')[0], group: 'Companies',
+                          label: g.company, sub: 'publishes its agent catalog' })),
+    ...guests.map(g => ({ key: 'agent:' + g.agent, group: 'Guest agents',
+                          label: g.who.replace(/^the /, ''), sub: g.agent })),
+    { key: 'venue:nanda-demo', group: 'Restaurant', label: 'The restaurant', sub: host(cfg.venue) },
+  ];
+}
+
+function nodeLabel(key) {
+  const n = NODES.find(x => x.key === key);
+  return n ? n.label : key;
+}
+
+/* Laid out once; a step only changes classes on it. */
+function drawMap() {
+  const W = 500, NX = 240, NW = 256, NH = 40, CX = 2, CW = 150, CH = 58;
+  let y = 8, parts = [], lastGroup = '';
+  for (const n of NODES) {
+    if (n.group !== lastGroup) { y += lastGroup ? 14 : 0; parts.push(`<text class="grp" x="${NX}" y="${y + 10}">${esc(n.group)}</text>`); y += 18; lastGroup = n.group; }
+    n.y = y + NH / 2;
+    y += NH + 8;
+  }
+  const H = y + 4, cy = H / 2;
+  const edges = NODES.map(n =>
+    `<path class="edge" id="e-${esc(n.key)}" d="M${CX + CW} ${cy} C ${CX + CW + 50} ${cy}, ${NX - 50} ${n.y}, ${NX} ${n.y}"/>`).join('');
+  const nodes = NODES.map(n => `<g class="node" data-key="${esc(n.key)}">
+      <rect x="${NX}" y="${n.y - NH / 2}" width="${NW}" height="${NH}"/>
+      <text x="${NX + 12}" y="${n.y - 2}">${esc(n.label)}</text>
+      <text class="sub" x="${NX + 12}" y="${n.y + 12}">${esc(short(n.sub, 36))}</text></g>`).join('');
+  $('st-map').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img">
+    ${edges}${parts.join('')}${nodes}
+    <g class="node used" data-key="concierge">
+      <rect x="${CX}" y="${cy - CH / 2}" width="${CW}" height="${CH}"/>
+      <text x="${CX + 14}" y="${cy - 4}">The concierge</text>
+      <text class="sub" x="${CX + 14}" y="${cy + 13}">acting for the host</text></g>
+    <g id="st-packets"></g></svg>`;
+}
+
+function mark(s) {
+  const map = $('st-map');
+  if (!map.firstChild) return;
+  const used = new Set(player.steps.slice(0, player.at + 1).map(partyOf));
+  const on = s ? partyOf(s) : '';
+  const refused = s ? isRefusal(s) : false;
+  for (const g of map.querySelectorAll('.node[data-key]')) {
+    const k = g.dataset.key;
+    if (k === 'concierge') continue;
+    g.classList.toggle('used', used.has(k));
+    g.classList.toggle('on', k === on);
+    g.classList.toggle('refused', k === on && refused);
+  }
+  for (const n of NODES) {
+    const e = document.getElementById('e-' + n.key);
+    if (!e) continue;
+    e.classList.toggle('used', used.has(n.key));
+    e.classList.toggle('on', n.key === on);
+  }
+  sendPacket(on, refused);
+}
+
+/* A dot travels out with the request and back with the answer: hollow when the
+   answer was a refusal. Skipped for readers who asked for less motion. */
+function sendPacket(key, refused) {
+  const box = document.getElementById('st-packets');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!key || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const path = document.getElementById('e-' + key);
+  if (!path) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const dot = document.createElementNS(ns, 'circle');
+  dot.setAttribute('r', '6');
+  dot.setAttribute('class', 'packet');
+  const motion = document.createElementNS(ns, 'animateMotion');
+  motion.setAttribute('dur', '1.8s');
+  motion.setAttribute('keyPoints', '0;1;0');
+  motion.setAttribute('keyTimes', '0;0.5;1');
+  motion.setAttribute('calcMode', 'linear');
+  motion.setAttribute('fill', 'freeze');
+  motion.setAttribute('begin', 'indefinite');
+  motion.setAttribute('path', path.getAttribute('d'));
+  dot.appendChild(motion);
+  box.appendChild(dot);
+  if (refused) setTimeout(() => dot.setAttribute('class', 'packet back'), 900);
+  try { motion.beginElement(); } catch (_) { /* SMIL unsupported: the map still marks the hop */ }
+}
+
+const short = (v, n = 96) => { const t = String(v ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+const clock = t => String(t || '').slice(11, 16);
+
+/* What was asked and what came back, in a few rows rather than a JSON dump. */
+function exchange(s) {
+  const mp = payloadOf(s), q = mp.request || {}, a = mp.answer || {};
+  const env = a.envelope || {};
+  const reply = () => env.ok === undefined ? [] : [['Reply', env.ok ? 'accepted' : 'refused — ' + (env.detail || '')]];
+  const asked = [], got = [];
+  switch (s.step) {
+    case 'discover.organisation':
+      asked.push(['Search for', `“${q.query}”`]);
+      for (const m of (a.matches || []).slice(0, 1)) { got.push(['Identifier', m.urn || '—'], ['Catalog at', m.url]); }
+      if (a.matches && !a.matches.length) got.push(['Matches', 'none']);
+      break;
+    case 'discover.catalog':
+      asked.push(['Read', a.url || `${q.org}/.well-known/ai-catalog.json`]);
+      if (a.entries) got.push(['Listings', a.entries.map(e => e.identifier).join(', ')]);
+      break;
+    case 'discover.agent':
+      if (q.capability) asked.push(['Agent tagged', q.capability]);
+      if (q.urn) asked.push(['Look up name', q.urn]);
+      if (a.identifier) got.push(['Agent', a.identifier]);
+      if (a.card_name) got.push(['Agent card', a.card_name]);
+      if (a.endpoint) got.push(['Answers at', a.endpoint]);
+      break;
+    case 'ask.intent': case 'ask.note':
+      asked.push(['Tool', q.tool], ['To', (q.peer || {}).url]);
+      got.push(...reply());
+      break;
+    case 'venue.availability':
+      asked.push(['Table', q.resource], ['Sittings', (q.start || []).map(clock).join(', ')]);
+      got.push(['Free', (a.open || []).map(clock).join(', ') || 'none'], ...reply());
+      break;
+    case 'venue.hold.multiparty':
+      asked.push(['Table', `${q.resource} at ${clock(q.start)}`],
+                 ['Naming', (q.principals || []).map(p => p.startsWith('did:') ? 'the host' : p).join(', ')]);
+      got.push(...reply());
+      break;
+    case 'venue.consent.host': case 'venue.consent.as_guest':
+      asked.push(['Agree for', String(q.principal || '').startsWith('did:') ? 'the host' : q.principal],
+                 ['Presented', q.presented || 'nothing']);
+      got.push(...reply());
+      break;
+    default:
+      if (q.hold_id !== undefined) asked.push(['Hold', q.hold_id || '(none)']);
+      got.push(...reply());
+  }
+  if (a.error) got.push(['Error', a.error]);
+  return { asked: asked.filter(r => r[1]), got: got.filter(r => r[1]) };
+}
+
+/* The one thing to take away from a step, where the caption alone leaves it implicit. */
+const TAKEAWAY = {
+  'discover.organisation': 'The index does not host agents. It answers with a stable identifier for the company and where its catalog lives — the first hop.',
+  'discover.catalog': 'The company, not the index, lists its own agents. This is the second hop.',
+  'discover.agent': 'The agent card gives the address the agent actually answers on. That is the last hop: from here on the concierge talks to the agent directly.',
+  'ask.intent': 'This is agent-to-agent: the concierge is talking to an agent another company runs.',
+  'venue.hold.multiparty': 'A hold is not a booking. It becomes one only when everyone named agrees.',
+  'venue.consent.as_guest': 'This refusal is the point of the demo: an agent may act only for someone who signed it a grant.',
+};
+
+/* A refusal names its rule; say which rule, in words, for the ones a reader hits. */
+function whyRefused(s) {
+  const t = (s.outcome || '').toLowerCase();
+  if (t.includes('no index record')) return 'The restaurant only deals with agents it can look up in the '
+    + 'second index. This copy of the concierge has never been registered there \u2014 a localhost address '
+    + 'is never registered \u2014 so its signature checks out but nobody vouches for the key.';
+  if (s.step === 'venue.consent.as_guest') return 'The guest never signed this agent a grant, so it cannot '
+    + 'agree on their behalf.';
+  return '';
+}
+
+function renderCard() {
+  const card = $('st-card');
+  const s = player.steps[player.at];
+  if (!s) {
+    card.innerHTML = `<p class="c-meta">Before you start</p>
+      <h4>Watch the concierge work, one step at a time</h4>
+      <p class="c-plain">Press &ldquo;Run this request&rdquo;. Each step shows who the concierge is
+        talking to on the map, what it asked, and what came back. It plays by itself; pause to
+        read, or step through with Back and Next (or the arrow keys).</p>`;
+    return;
+  }
+  const phase = PHASES.find(p => p.id === s.phase);
+  const { asked, got } = exchange(s);
+  const refused = isRefusal(s);
+  const subject = (payloadOf(s).request || {}).subject || '';
+  const rows = (title, list) => list.length
+    ? `<span class="sec">${title}</span>${list.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd title="${esc(v)}">${esc(short(v))}</dd>`).join('')}` : '';
+  const live = player.at === player.steps.length - 1 && !player.finished;
+  card.innerHTML = `
+    <p class="c-meta">${phase ? `Phase ${phase.number} · ${esc(phase.title)} · ` : ''}step ${player.at + 1} of ${player.finished ? player.steps.length : player.steps.length + '+'}</p>
+    <h4>${esc(s.heading)}</h4>
+    <p class="c-route"><b>Concierge</b> &rarr; <b>${esc(nodeLabel(partyOf(s)))}</b>${subject ? ` &nbsp;·&nbsp; about ${esc(subject)}` : ''}</p>
+    <p class="c-plain">${esc(s.plain)}</p>
+    <dl class="c-io">${rows('Asked', asked)}${rows('Got back', got)}</dl>
+    ${refused ? '<span class="c-verdict">Refused</span>' : ''}
+    <p class="c-out${refused ? ' refused' : ''}">${esc(s.outcome)}</p>
+    ${refused && whyRefused(s) ? `<p class="c-why"><b>Why:</b> ${esc(whyRefused(s))}</p>` : ''}
+    ${TAKEAWAY[s.step] ? `<p class="c-why">${esc(TAKEAWAY[s.step])}</p>` : ''}
+    ${live ? '<p class="c-wait">Waiting for the next step…</p>' : ''}`;
+}
+
+function renderTrack() {
+  let html = '', lastPhase = null;
+  player.steps.forEach((s, i) => {
+    if (lastPhase !== null && s.phase !== lastPhase) html += '<li class="gap" aria-hidden="true"></li>';
+    lastPhase = s.phase;
+    const cls = [i <= player.at ? 'seen' : '', i === player.at ? 'on' : '', isRefusal(s) ? 'refused' : ''].join(' ');
+    html += `<li><button type="button" class="${cls}" data-i="${i}"
+      aria-label="Step ${i + 1}: ${esc(s.heading)}"${i === player.at ? ' aria-current="step"' : ''}>${i + 1}</button></li>`;
+  });
+  $('st-track').innerHTML = html;
+}
+
+function syncList() {
+  for (const li of document.querySelectorAll('#phases li.step')) {
+    const i = +li.dataset.i;
+    li.classList.toggle('ahead', i > player.at);
+    li.classList.toggle('now', i === player.at);
+  }
+}
+
+function syncControls() {
+  const n = player.steps.length;
+  $('st-prev').disabled = player.at <= 0;
+  $('st-next').disabled = player.at >= n - 1;
+  $('st-play').disabled = n === 0;
+  $('st-play').textContent = player.playing ? 'Pause' : (player.at >= n - 1 && player.finished ? 'Replay' : 'Play');
+}
+
+function show(i) {
+  player.at = Math.max(-1, Math.min(i, player.steps.length - 1));
+  const s = player.steps[player.at];
+  renderCard(); renderTrack(); syncList(); mark(s); syncControls();
+}
+
+/* Advance one step per DWELL_MS while playing; wait when caught up with the run. */
+function schedule() {
+  clearTimeout(player.timer);
+  player.timer = null;
+  if (!player.playing) return;
+  if (player.at >= player.steps.length - 1) {
+    if (player.finished) { player.playing = false; syncControls(); }
+    return;
+  }
+  const delay = player.at < 0 ? 0 : DWELL_MS;
+  player.timer = setTimeout(() => { show(player.at + 1); schedule(); }, delay);
+}
+
+function playerArrive(s) {
+  player.steps.push(s);
+  renderTrack(); syncControls();
+  if (player.at === player.steps.length - 2) renderCard(); // drop the "waiting" line
+  if (player.playing && !player.timer) schedule();
+}
+
+function playerFinish() {
+  player.finished = true;
+  renderCard(); syncControls();
+  if (player.playing && !player.timer) schedule();
+}
+
+function playerReset() {
+  clearTimeout(player.timer);
+  Object.assign(player, { steps: [], at: -1, playing: true, timer: null, finished: false });
+  show(-1);
+}
+
+function pauseAt(i) { player.playing = false; clearTimeout(player.timer); player.timer = null; show(i); }
+
+$('st-prev').addEventListener('click', () => pauseAt(player.at - 1));
+$('st-next').addEventListener('click', () => pauseAt(player.at + 1));
+$('st-play').addEventListener('click', () => {
+  if (player.playing) { pauseAt(player.at); return; }
+  if (player.finished && player.at >= player.steps.length - 1) show(-1);
+  player.playing = true; syncControls(); schedule();
+});
+$('st-track').addEventListener('click', e => {
+  const b = e.target.closest('button[data-i]');
+  if (b) pauseAt(+b.dataset.i);
+});
+$('phases').addEventListener('click', e => {
+  const li = e.target.closest('li.step');
+  if (li && li.dataset.i !== undefined) {
+    pauseAt(+li.dataset.i);
+    document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+document.addEventListener('keydown', e => {
+  if (!$('p-plain').classList.contains('on') || !player.steps.length) return;
+  if (e.target.closest('input, textarea, [role="tablist"]')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); pauseAt(player.at + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); pauseAt(player.at - 1); }
+});
+
 /* The phases are laid out before the run starts, so a reader knows the shape of
    what is about to happen and what each phase is meant to demonstrate. */
 function layOutPhases() {
@@ -520,6 +897,10 @@ function addStep(s) {
   list.closest('.phase').classList.remove('idle');
   const li = document.createElement('li');
   li.className = 'step' + (isRefusal(s) ? ' refused' : '');
+  /* Its index in the player, so clicking the entry shows it there. Rendered
+     "ahead" until the player reaches it: present, but visibly not yet. */
+  li.dataset.i = String(document.querySelectorAll('#phases li.step').length);
+  if (+li.dataset.i > player.at) li.classList.add('ahead');
   const nc = (s.not_claimed || []).length
     ? `<ul class="nc"><span class="lbl">This step does not prove</span>${
         s.not_claimed.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
@@ -651,11 +1032,17 @@ function busy(on) {
   $('run').textContent = on ? 'Running\u2026' : 'Run this request';
 }
 
+/* Bumped by every reset, so a replay still loading when Run is pressed cannot
+   paint the old run into the middle of the new one. */
+let generation = 0;
+
 function reset() {
+  generation++;
   layOutPhases();
   raw.innerHTML = '<p class="empty">No run yet.</p>';
   summaryBox.innerHTML = '';
   document.getElementById('receipts').innerHTML = '';
+  playerReset();
 }
 
 $('run').addEventListener('click', () => {
@@ -668,40 +1055,59 @@ $('run').addEventListener('click', () => {
   source.addEventListener('start', () => setStatus('Running. Steps appear as each one completes.'));
   source.addEventListener('step', e => {
     const s = JSON.parse(e.data);
-    n++; seen.push(s); addStep(s); addRaw(s);
+    n++; seen.push(s); addStep(s); addRaw(s); playerArrive(s);
     setStatus(`Step ${n} complete \u2014 ${s.heading.toLowerCase()}.`);
   });
   source.addEventListener('done', e => {
     showSummary(JSON.parse(e.data));
     showReceipts(seen);
+    playerFinish();
     setStatus(`Finished. ${n} steps recorded and signed.`);
     source.close(); busy(false);
   });
   source.addEventListener('error', e => {
     let msg = 'The connection to the agent dropped.';
     try { msg = JSON.parse(e.data).message; } catch (_) {}
+    let limited = false;
+    try { limited = !!JSON.parse(e.data).limited; } catch (_) {}
     setStatus(msg);
     if (source) source.close();
+    playerFinish();
     busy(false);
+    // Turned away is not a dead end: the last run shows what a live one does.
+    if (limited) loadLast({ note: msg });
   });
 });
 
-$('replay').addEventListener('click', async () => {
-  reset(); busy(true);
-  setStatus('Loading the last run\u2026');
+/* The last run, played through the step-by-step player. Nothing is contacted:
+   these are the receipts the agent kept. On page load this is what a visitor
+   sees first, so the demo explains itself before anyone spends a live run. */
+async function loadLast({ onLoad = false, note = '' } = {}) {
+  if (!onLoad) { reset(); busy(true); setStatus('Loading the last run\u2026'); }
+  const mine = generation;
   try {
-    const r = await fetch(BASE + 'last');
-    const d = await r.json();
-    if (!d.steps || !d.steps.length) { setStatus(d.note || 'No run recorded yet.'); busy(false); return; }
-    for (const s of d.steps) { addStep(s); addRaw(s); }
+    const d = await fetch(BASE + 'last').then(r => r.json());
+    if (mine !== generation) return;          // a run started meanwhile
+    if (!d.steps || !d.steps.length) {
+      if (!onLoad) setStatus(note || d.note || 'No run recorded yet.');
+      return;
+    }
+    for (const s of d.steps) { addStep(s); addRaw(s); playerArrive(s); }
+    playerFinish();
     showSummary(d.summary);
     showReceipts(d.steps);
-    setStatus(`Replay of the last run \u2014 ${d.steps.length} steps.`);
+    const at = ((d.steps[0].entry || {}).issued_at || '').replace('T', ' ').replace('Z', ' UTC');
+    setStatus((note ? note + ' ' : '')
+      + `Replaying the last run${at ? `, recorded ${at}` : ''} \u2014 ${d.steps.length} steps. `
+      + 'Nothing is contacted to show it; press \u201CRun this request\u201D to run it live.');
   } catch (err) {
-    setStatus('Could not load the last run: ' + err.message);
+    if (!onLoad) setStatus('Could not load the last run: ' + err.message);
+  } finally {
+    if (!onLoad) busy(false);
   }
-  busy(false);
-});
+}
+
+$('replay').addEventListener('click', () => loadLast());
 
 /* Everything the page says about the run comes from the server, so it cannot
    describe a run different from the one it triggers. */
@@ -726,6 +1132,13 @@ fetch(BASE + 'config').then(r => r.json()).then(d => {
        <p class="m">${esc(d.index.replace(/^https?:\/\//, ''))}</p></span></li>`,
   ].join('');
   layOutPhases();
+  buildNodes(d); drawMap(); show(-1);
+  const limit = (d.run_limit || {}).per_hour;
+  if (limit) {
+    $('run-note').insertAdjacentText('beforeend',
+      ` Live runs are limited to ${limit} per visitor per hour; the last run replays for free.`);
+  }
+  loadLast({ onLoad: true });
 }).catch(() => {
   $('request').textContent = 'Could not reach the agent to load the request.';
 });

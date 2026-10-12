@@ -43,6 +43,10 @@ def fake_index(monkeypatch):
                         {
                             "org_id": "orrery-demo",
                             "registry_url": "https://a.test",
+                            # The ARD form the index actually returns. The
+                            # urn:ai:domain: shape this stub used was retired by
+                            # the index's own identifier migration, so a fixture
+                            # carrying it describes a response nothing sends.
                             "identifier": "urn:air:a.test:catalog:root",
                             "tags": ["general ai"],
                         },

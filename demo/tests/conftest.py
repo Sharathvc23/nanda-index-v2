@@ -327,6 +327,64 @@ STUB_STEPS = [
 ]
 
 
+class _RunGate:
+    """Holds a stubbed run open so a test can observe the page mid-run.
+
+    The in-flight state — a disabled run button, a spinner, a partial step list —
+    exists only while the run is unfinished, and the stub finishes in
+    microseconds. Sampling it right after the click is therefore a race: the
+    assertion passes or fails depending on which of two threads got there first,
+    which is why ``test_the_run_button_is_disabled_while_a_run_is_in_flight``
+    failed about one run in four with nothing wrong with the page.
+
+    A sleep would only widen the window. This closes it: the stubbed run blocks
+    until the test releases it, so the in-flight state is guaranteed to be
+    observable, and the test asserts on a *transition* rather than on a sample.
+
+    The run executes in its own thread (``server.generate``'s worker), so
+    blocking it does not block the server — the page keeps answering while the
+    run is held. ``wait_if_held`` takes a timeout anyway: a test that forgets to
+    release should fail, not wedge the module-scoped server.
+    """
+
+    def __init__(self) -> None:
+        self._held = False
+        self._entered = threading.Event()
+        self._released = threading.Event()
+
+    def hold(self) -> None:
+        self._held = True
+        self._entered.clear()
+        self._released.clear()
+
+    def wait_if_held(self, timeout: float = 15.0) -> None:
+        """Called by the stubbed scenario, at the top of the run."""
+        if self._held:
+            self._entered.set()
+            self._released.wait(timeout)
+
+    def wait_until_running(self, timeout: float = 15.0) -> bool:
+        """True once the run has actually started and is being held."""
+        return self._entered.wait(timeout)
+
+    def release(self) -> None:
+        self._held = False
+        self._released.set()
+
+
+RUN_GATE = _RunGate()
+
+
+@pytest.fixture
+def run_gate():
+    """Lets one test hold the stubbed run open. Always released afterwards."""
+    RUN_GATE.hold()
+    try:
+        yield RUN_GATE
+    finally:
+        RUN_GATE.release()
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -371,6 +429,9 @@ def ui_server(request):
     me = Identity(agent_id="concierge", seed=seed, did=did_of(seed), subject_key=subject_key_of(seed))
 
     def fake_arrange(*_a, on_step=None, **_k):
+        # Only ever waits for a test that asked to hold the run open; a no-op
+        # otherwise, so every other test runs at full speed.
+        RUN_GATE.wait_if_held()
         chain = ReceiptChain(private_key=seed, principal_did=HOST, granted_by=None)
         for step, label, outcome, not_claimed in STUB_STEPS:
             entry = chain.append(

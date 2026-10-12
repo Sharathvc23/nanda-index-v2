@@ -37,6 +37,55 @@ export function parsePositiveInt(key: string, raw: string): number {
   return n;
 }
 
+/**
+ * The index's own public address, validated.
+ *
+ * API_BASE_URL is not just a link: `buildDescriptor` derives the ARD
+ * descriptor's `identifier` (`urn:air:<hostname>:registry:nanda-index`), its
+ * `did:web:<host>` identity, the documentation link and EVERY advertised
+ * endpoint URL from this one string. A value that is merely well-formed enough
+ * to concatenate therefore ships an index that misdescribes itself, and nothing
+ * fails until a client follows the descriptor — which is the correct way to use
+ * it, and the way that then does not work.
+ *
+ * So the shape is checked here, where every other env var is checked:
+ *   * absolute, and http(s) — a bare host concatenates into `api.example/api/ard`
+ *   * carries a hostname
+ *   * carries no path, query or fragment — a trailing `/api` would be duplicated
+ *     into every derived endpoint
+ *
+ * What this CANNOT catch is a hostname that is well-formed and wrong:
+ * `https://api.example.orgx` passes every check above. That is what
+ * `assertSelfAddressResolves` is for, at startup.
+ */
+export function parseApiBaseUrl(key: string, raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    console.error(
+      `FATAL: env var ${key} must be an absolute URL like https://api.example.com (got "${raw}")`,
+    );
+    process.exit(1);
+  }
+  const problem =
+    parsed.protocol !== 'http:' && parsed.protocol !== 'https:'
+      ? `must be http(s), not "${parsed.protocol.replace(':', '')}"`
+      : !parsed.hostname
+        ? 'names no host'
+        : parsed.pathname !== '/' && parsed.pathname !== ''
+          ? `must carry no path (got "${parsed.pathname}") — it is prefixed to every advertised endpoint`
+          : parsed.search || parsed.hash
+            ? 'must carry no query string or fragment'
+            : '';
+  if (problem) {
+    console.error(`FATAL: env var ${key} ${problem} (got "${raw}")`);
+    process.exit(1);
+  }
+  return trimmed;
+}
+
 export interface DbConfig {
   readonly url: string;
   readonly maxConnections: number;
@@ -206,7 +255,10 @@ export function buildConfig(): Config {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,
       keyId:      optionalEnv('SIGNING_KEY_ID', 'garr-dev-unspecified'),
     },
-    apiBaseUrl: optionalEnv('API_BASE_URL', `http://localhost:${parsePositiveInt('PORT', optionalEnv('PORT', '3001'))}`),
+    apiBaseUrl: parseApiBaseUrl(
+      'API_BASE_URL',
+      optionalEnv('API_BASE_URL', `http://localhost:${parsePositiveInt('PORT', optionalEnv('PORT', '3001'))}`),
+    ),
     federation: {
       mode: parseFederationMode(optionalEnv('FEDERATION_MODE', 'none')),
       upstreamUrl: optionalEnv('FEDERATION_UPSTREAM_URL', 'https://ora.ai/api/ard/search'),

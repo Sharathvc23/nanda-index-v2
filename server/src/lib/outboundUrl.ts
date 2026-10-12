@@ -66,6 +66,50 @@ function isBlockedAddress(address: string): boolean {
 const defaultLookup: HostLookup = async (hostname) =>
   (await dnsLookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
 
+/**
+ * Warns if the address this index advertises as ITSELF does not resolve.
+ *
+ * The ARD descriptor at GET /api/ard describes the index to strangers: its
+ * `identifier`, its `did:web`, and every endpoint a client is meant to call are
+ * all derived from API_BASE_URL. A hostname that is well-formed and wrong —
+ * `api.example.orgx` for `api.example.org` — passes config validation and
+ * produces a descriptor that is internally consistent and entirely unusable.
+ * Nothing in the service fails: the endpoints still work at the real host, so
+ * health checks pass, logs are clean, and only a client that does the correct
+ * thing and follows the descriptor is broken by it.
+ *
+ * Reported, never fatal. An index that refused to boot because DNS was slow
+ * would be a worse outage than the one this prevents, and the address may be
+ * published moments after the service starts. Returns the warning text so a
+ * caller can assert on it, and null when the address resolves.
+ */
+export async function checkSelfAddressResolves(
+  apiBaseUrl: string,
+  lookup: HostLookup = defaultLookup,
+): Promise<string | null> {
+  let hostname: string;
+  try {
+    hostname = new URL(apiBaseUrl).hostname;
+  } catch {
+    return `API_BASE_URL "${apiBaseUrl}" is not a URL, so the ARD descriptor cannot describe this index`;
+  }
+  // A loopback/dev address is not published to anyone, so its resolution is
+  // nobody's problem; only a public address is a promise to a stranger.
+  if (hostname === 'localhost' || isIP(hostname)) return null;
+  try {
+    const addresses = await lookup(hostname);
+    if (addresses.length > 0) return null;
+  } catch {
+    // fall through to the warning — an unresolvable name is the finding
+  }
+  return (
+    `API_BASE_URL is "${apiBaseUrl}", and "${hostname}" does not resolve. ` +
+    'GET /api/ard advertises that host as this index\'s identifier, did:web and ' +
+    'every endpoint, so a client that follows the descriptor cannot reach it. ' +
+    'The service itself is unaffected, which is why this is easy to miss.'
+  );
+}
+
 export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<void> {
   let url: URL;
   try {

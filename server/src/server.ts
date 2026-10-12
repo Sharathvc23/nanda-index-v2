@@ -10,6 +10,7 @@ import { registerSwagger } from './plugins/swagger.js';
 import { registerCookiePlugin } from './plugins/cookie.js';
 import { registerJwtPlugin } from './plugins/jwt.js';
 import { registerOAuthPlugin } from './plugins/oauth.js';
+import { checkSelfAddressResolves } from './lib/outboundUrl.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
@@ -68,6 +69,14 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
 async function main(): Promise<void> {
   const { fastify, config } = await buildServer();
+
+  // Said at startup, where an operator is already looking. The ARD descriptor
+  // describes this index to strangers entirely in terms of API_BASE_URL, so an
+  // address that does not resolve is a descriptor nobody can follow — and
+  // nothing else in the service notices, because the endpoints keep working at
+  // whatever host the request actually arrived on.
+  const selfAddressWarning = await checkSelfAddressResolves(config.apiBaseUrl);
+  if (selfAddressWarning) fastify.log.warn(selfAddressWarning);
 
   const shutdown = async () => {
     await fastify.close();

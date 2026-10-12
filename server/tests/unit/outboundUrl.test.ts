@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { assertPublicHttpUrl, OutboundUrlError, type HostLookup } from '../../src/lib/outboundUrl.js';
+import {
+  assertPublicHttpUrl,
+  checkSelfAddressResolves,
+  OutboundUrlError,
+  type HostLookup,
+} from '../../src/lib/outboundUrl.js';
 
 /** Resolves every hostname to the given addresses — no real DNS in tests. */
 const resolvesTo = (...addresses: string[]): HostLookup => async () => addresses;
@@ -47,5 +52,50 @@ describe('assertPublicHttpUrl', () => {
   it('refuses a hostname that does not resolve', async () => {
     const lookup: HostLookup = async () => { throw new Error('ENOTFOUND'); };
     await expect(assertPublicHttpUrl('https://nope.invalid', lookup)).rejects.toBeInstanceOf(OutboundUrlError);
+  });
+});
+
+
+describe('checkSelfAddressResolves', () => {
+  /** A hostname nothing knows — what a one-character typo produces. */
+  const resolvesNothing: HostLookup = async () => {
+    throw new Error('ENOTFOUND');
+  };
+
+  it('is silent when the advertised host resolves', async () => {
+    expect(await checkSelfAddressResolves('https://api.example.com', resolvesTo('93.184.216.34'))).toBeNull();
+  });
+
+  it('is silent for localhost and IP literals, which are published to nobody', async () => {
+    expect(await checkSelfAddressResolves('http://localhost:3001', resolvesNothing)).toBeNull();
+    expect(await checkSelfAddressResolves('http://127.0.0.1:3001', resolvesNothing)).toBeNull();
+  });
+
+  it('reports the typo this exists for, and says what breaks', async () => {
+    // One character: api.example.org → api.example.orgx. Valid shape, no such
+    // host. GET /api/ard advertises it as the index's identifier, did:web and
+    // every endpoint, so a client that follows the descriptor — the correct way
+    // to use it — cannot reach anything.
+    const warning = await checkSelfAddressResolves('https://api.example.orgx', resolvesNothing);
+    expect(warning).toContain('api.example.orgx');
+    expect(warning).toContain('does not resolve');
+    expect(warning).toContain('/api/ard');
+  });
+
+  it('reports a host that resolves to nothing at all', async () => {
+    expect(await checkSelfAddressResolves('https://api.example.com', resolvesTo())).toContain('does not resolve');
+  });
+
+  it('reports a value that is not a URL rather than throwing at startup', async () => {
+    expect(await checkSelfAddressResolves('not a url', resolvesNothing)).toContain('is not a URL');
+  });
+
+  it('never throws, because a slow resolver must not stop the index booting', async () => {
+    const explodes: HostLookup = async () => {
+      throw new Error('EAI_AGAIN');
+    };
+    await expect(checkSelfAddressResolves('https://api.example.com', explodes)).resolves.toContain(
+      'does not resolve',
+    );
   });
 });

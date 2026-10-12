@@ -3,6 +3,7 @@ import {
   requireEnv,
   optionalEnv,
   parsePositiveInt,
+  parseApiBaseUrl,
   buildConfig,
 } from '../../src/config/index.js';
 
@@ -180,5 +181,54 @@ describe('buildConfig', () => {
 
     delete process.env.JWT_SECRET;
     delete process.env.NODE_ENV;
+  });
+});
+
+
+describe('parseApiBaseUrl', () => {
+  // Why this is validated at all: buildDescriptor() derives the ARD
+  // descriptor's identifier, its did:web, the docs link and every advertised
+  // endpoint from this one string. A value that merely concatenates ships an
+  // index that misdescribes itself, and only a client following the descriptor
+  // — the correct way to use it — is broken by it.
+  it('accepts a bare https origin and drops a trailing slash', () => {
+    expect(parseApiBaseUrl('API_BASE_URL', 'https://api.example.com')).toBe('https://api.example.com');
+    expect(parseApiBaseUrl('API_BASE_URL', 'https://api.example.com/')).toBe('https://api.example.com');
+    expect(parseApiBaseUrl('API_BASE_URL', '  https://api.example.com  ')).toBe('https://api.example.com');
+  });
+
+  it('accepts the localhost default, port and all', () => {
+    expect(parseApiBaseUrl('API_BASE_URL', 'http://localhost:3001')).toBe('http://localhost:3001');
+  });
+
+  it('exits when the value is not an absolute URL', () => {
+    const exitSpy = mockExit();
+    expect(() => parseApiBaseUrl('API_BASE_URL', 'api.example.com')).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits on a non-http(s) scheme', () => {
+    const exitSpy = mockExit();
+    expect(() => parseApiBaseUrl('API_BASE_URL', 'ftp://api.example.com')).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits when a path is included, because it is prefixed to every endpoint', () => {
+    // "https://api.example.com/api" would advertise …/api/api/ard/search.
+    const exitSpy = mockExit();
+    expect(() => parseApiBaseUrl('API_BASE_URL', 'https://api.example.com/api')).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits on a query string or fragment', () => {
+    const exitSpy = mockExit();
+    expect(() => parseApiBaseUrl('API_BASE_URL', 'https://api.example.com?x=1')).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('ACCEPTS a well-formed hostname that is wrong, which is the whole point of the startup check', () => {
+    // The defect this validator cannot see: one character, valid shape, a host
+    // that does not exist. checkSelfAddressResolves is the half that catches it.
+    expect(parseApiBaseUrl('API_BASE_URL', 'https://api.example.orgx')).toBe('https://api.example.orgx');
   });
 });

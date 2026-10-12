@@ -47,6 +47,11 @@ services:
       FRONTEND_URL: ${FRONTEND_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
       COOKIE_SECRET: ${COOKIE_SECRET}
+      # Public API origin — the ARD registry document (GET /api/ard) advertises it.
+      API_BASE_URL: ${API_BASE_URL:-https://api.nandaindex.org}
+      # Write-time representative-query enrichment for search; skipped when unset.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_ENRICHMENT_MODEL: ${OPENAI_ENRICHMENT_MODEL:-gpt-4o-mini}
     depends_on:
       db:
         condition: service_healthy

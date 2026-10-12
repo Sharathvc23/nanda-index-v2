@@ -43,7 +43,7 @@ export function AgentCandidateCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-slate-950">{candidate.display_name}</p>
+            <p className="font-semibold text-slate-950">{candidate.displayName}</p>
             {best && (
               <span className="rounded-full bg-accent-teal px-2.5 py-0.5 text-xs font-semibold text-accent-teal-ink">
                 Best match
@@ -78,7 +78,7 @@ export function AgentCandidateCard({
         <div className="shrink-0 text-right text-xs text-slate-400">
           <p>score {candidate.score.toFixed(2)}</p>
           <p className="mt-0.5">{BASIS_LABEL[candidate.provenance.basis]}</p>
-          <p className="mt-0.5 font-mono">{candidate.provenance.org_id}</p>
+          <p className="mt-0.5 font-mono">{candidate.provenance.orgId}</p>
           <button
             type="button"
             onClick={handleResolve}

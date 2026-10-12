@@ -98,7 +98,7 @@ const STAGES = [
     detail:
       "The resolver sends the identifier to the NANDA Index API. An exact match returns that entry (a catalog, an agent card, or a DNS SVCB pointer); otherwise, if the publisher fronts its resources with an AI Catalog, that catalog entry is returned (match: publisher) for the requester to look inside. Each record carries a TTL for caching.",
     input: "locator: urn:air:acme.com:agent:time",
-    output: "{ match, identifier, index_record { identifier, registry_url, media_type, publisher, extensions, ttl_seconds } }",
+    output: "{ match, identifier, entry { identifier, displayName, type, url, publisher, extensions } }",
     api: "GET /api/v1/resolve?locator=…",
   },
   {
@@ -108,7 +108,7 @@ const STAGES = [
       "retrieval or search of capabilities through AI Catalog, ARD, DNS-based service discovery, a gateway, or another native mechanism.",
     detail:
       "The resolver fetches the agent's catalog entry, then the full agent card, from the URL returned by Resolution. Enterprise registries serve an AI Catalog document; SMB and personal entries point directly to an A2A Agent Card, collapsing these into one request.",
-    input: "IndexRecord.registry_url  +  IndexRecord.identifier",
+    input: "entry.url  +  identifier",
     output: "AgentCard { url, authentication, skills, … }",
     api: "GET <registry_url>/agents/<identifier>, then GET <catalog_entry.url>",
   },

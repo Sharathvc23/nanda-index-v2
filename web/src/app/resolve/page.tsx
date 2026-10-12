@@ -125,27 +125,27 @@ export default function ResolvePage() {
     }
 
     // ── Hop 2: Registry ───────────────────────────────────────────────────
-    const { registry_url, media_type } = indexData.index_record;
+    const { url: entryUrl, type: entryType } = indexData.entry;
 
-    if (!registry_url) {
+    if (!entryUrl) {
       setHop2({ status: "skipped", url: "No URL to follow — inline data or custom discovery path." });
       setResolving(false);
       setLatency(Math.round(performance.now() - t0));
       return;
     }
 
-    const isDirectCard = media_type === "application/a2a-agent-card+json" ||
-      media_type === "application/mcp-server-card+json" ||
-      media_type === "application/agentskill+zip";
+    const isDirectCard = entryType === "application/a2a-agent-card+json" ||
+      entryType === "application/mcp-server-card+json" ||
+      entryType === "application/agentskill+zip";
     const h2url = isDirectCard
-      ? registry_url
-      : `${registry_url.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
+      ? entryUrl
+      : `${entryUrl.replace(/\/+$/, "")}/agents/${indexData.identifier}`;
 
     setHop2({ status: "loading", url: `GET ${h2url}` });
 
     let catalogEntry: CatalogEntry;
     try {
-      catalogEntry = await fetchAgentRecord(registry_url, indexData.identifier, media_type);
+      catalogEntry = await fetchAgentRecord(entryUrl, indexData.identifier, entryType);
       setHop2({ status: "ok", url: `GET ${h2url}`, data: catalogEntry });
     } catch (err) {
       setHop2({ status: "error", url: h2url, error: err instanceof ApiError ? err.message : "Registry unreachable." });

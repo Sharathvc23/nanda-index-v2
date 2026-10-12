@@ -18,11 +18,12 @@ async function seedEntry(entry: SeedEntry): Promise<void> {
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified,
-       status, identifier, media_type, domain_verified)
+       status, identifier, media_type, domain_verified, publisher)
     VALUES
       (${entry.orgId}, ${entry.orgId}, ${entry.domain}, ${`admin@${entry.domain ?? 'example.com'}`},
        ${entry.registryUrl}, 'tok', true, ${entry.status ?? 'active'}, ${entry.identifier}, ${entry.mediaType},
-       ${entry.domainVerified ?? entry.domain !== null})
+       ${entry.domainVerified ?? entry.domain !== null},
+       ${sql.json({ identifier: entry.domain ?? 'host39.org', displayName: entry.orgId, identityType: 'dns' })})
   `;
 }
 
@@ -62,8 +63,29 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
     expect(body.locator).toBe('urn:air:res-moon.example.com:agent:orders');
     expect(body.match).toBe('exact');
     expect(body.identifier).toBe('orders');
-    expect(body.index_record.org_id).toBe('res-moon');
-    expect(body.index_record.registry_url).toBe('https://agentcards.host39.org/res-moon/orders.json');
+    expect(body.entry.extensions['org.projectnanda'].orgId).toBe('res-moon');
+    expect(body.entry.url).toBe('https://agentcards.host39.org/res-moon/orders.json');
+  });
+
+  it('returns the entry as a paper-shaped AI Catalog entry (§5.4), not the internal record', async () => {
+    await seedEntry({
+      orgId: 'res-shape', domain: 'res-shape.example.com', identifier: 'urn:air:res-shape.example.com:agent:orders',
+      mediaType: 'application/a2a-agent-card+json', registryUrl: 'https://agentcards.host39.org/res-shape/orders.json',
+    });
+
+    const body = (await resolve(fastify, 'urn:air:res-shape.example.com:agent:orders')).json();
+
+    expect(body).not.toHaveProperty('index_record');
+    expect(body.entry).toMatchObject({
+      identifier: 'urn:air:res-shape.example.com:agent:orders',
+      displayName: expect.any(String),
+      type: 'application/a2a-agent-card+json',
+      url: 'https://agentcards.host39.org/res-shape/orders.json',
+      publisher: { identifier: 'res-shape.example.com', identityType: 'dns' },
+    });
+    expect(body.entry).not.toHaveProperty('registry_url');
+    expect(body.entry).not.toHaveProperty('media_type');
+    expect(body.entry).not.toHaveProperty('display_name');
   });
 
   it('resolves a host39-anchored personal identifier', async () => {
@@ -76,7 +98,7 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().match).toBe('exact');
-    expect(res.json().index_record.org_id).toBe('res-john');
+    expect(res.json().entry.extensions['org.projectnanda'].orgId).toBe('res-john');
   });
 
   it('resolves a personal identifier whatever the case of the email', async () => {
@@ -89,7 +111,7 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().match).toBe('exact');
-    expect(res.json().index_record.org_id).toBe('res-mixed');
+    expect(res.json().entry.extensions['org.projectnanda'].orgId).toBe('res-mixed');
   });
 
   it('normalises the publisher FQDN before matching', async () => {
@@ -101,7 +123,7 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
     const res = await resolve(fastify, 'URN:AIR:Res-Sky.Example.COM:agent:refunds');
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().index_record.org_id).toBe('res-sky');
+    expect(res.json().entry.extensions['org.projectnanda'].orgId).toBe('res-sky');
   });
 
   it('falls back to the publisher\'s catalog when the agent is listed inside it', async () => {
@@ -116,7 +138,7 @@ describe('GET /api/v1/resolve — urn:air: resolution', () => {
     const body = res.json();
     expect(body.match).toBe('publisher');
     expect(body.identifier).toBe('time');
-    expect(body.index_record.identifier).toBe('urn:air:res-acme.example.com:catalog:root');
+    expect(body.entry.identifier).toBe('urn:air:res-acme.example.com:catalog:root');
   });
 
   it('does not fall back to a different agent card under the same publisher', async () => {

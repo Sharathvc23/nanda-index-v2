@@ -6,12 +6,12 @@ import type { FederationConfig } from '../../src/config/index.js';
 function makeCandidate(overrides: Partial<AgentCandidate> = {}): AgentCandidate {
   return {
     identifier: 'local-1',
-    display_name: 'Local Agent',
+    displayName: 'Local Agent',
     type: 'application/a2a-agent-card+json',
     url: 'https://local.example.com/agent',
     description: 'A local candidate',
     tags: ['local'],
-    provenance: { org_id: 'local-org', registry_url: 'https://local.example.com', basis: 'single_agent_org' },
+    provenance: { orgId: 'local-org', registryUrl: 'https://local.example.com', basis: 'single_agent_org' },
     score: 0.9,
     ...overrides,
   };
@@ -83,7 +83,7 @@ describe('maybeFederateOut', () => {
     expect(result.candidates.map((c) => c.identifier).sort()).toEqual(['local-1', 'upstream-1']);
     const upstream = result.candidates.find((c) => c.identifier === 'upstream-1')!;
     expect(upstream.provenance.basis).toBe('federated');
-    expect(upstream.provenance.org_id).toBe('ora.ai');
+    expect(upstream.provenance.orgId).toBe('ora.ai');
   });
 
   it('mode "auto" falls back to a referral when the upstream is unreachable', async () => {

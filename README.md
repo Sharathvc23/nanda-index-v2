@@ -254,7 +254,7 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 |--------|------|-------------|
 | `GET` | `/api/v1/index` | List all active index entries, in the paper's AI Catalog entry shape (`identifier`, `displayName`, `type`, `url`, `publisher`, `extensions`); operational state (`orgId`, `status`, `ttlSeconds`, verification flags) is under `extensions["org.projectnanda"]` |
 | `GET` | `/api/v1/index/:org_id` | Get a single index entry (same shape) |
-| `GET` | `/api/v1/resolve?locator=<urn>` | Resolve a URN to an IndexRecord |
+| `GET` | `/api/v1/resolve?locator=<urn>` | Resolve a URN to its AI Catalog entry |
 | `GET` | `/api/v1/search?q=<query>` | Keyword or URN search |
 | `GET` | `/api/v1/verify-email?token=<token>` | Activate org via email link |
 
@@ -278,11 +278,13 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:f
   "locator": "urn:air:acme.com:agent:flights",
   "identifier": "flights",
   "match": "publisher",          // "exact" when an entry has exactly this identifier
-  "index_record": {
-    "org_id": "acme",
+  "entry": {                     // an AI Catalog entry (paper §5.4), same shape as GET /api/v1/index
     "identifier": "urn:air:acme.com:catalog:root",
-    "registry_url": "https://registry.acme.com",
-    "media_type": "application/ai-catalog+json",
+    "displayName": "Acme",
+    "type": "application/ai-catalog+json",
+    "url": "https://registry.acme.com",
+    "publisher": { "identifier": "acme.com", "displayName": "Acme", "identityType": "dns" },
+    "extensions": { "org.projectnanda": { "resolutionRole": "nested-ai-catalog", "orgId": "acme", ... } },
     ...
   }
 }
@@ -294,10 +296,10 @@ curl "https://api.nandaindex.org/api/v1/resolve?locator=urn:air:acme.com:agent:f
 
 ```
 1. GET /api/v1/resolve?locator=urn:air:acme.com:agent:flights
-   Returns: { match, identifier, index_record { registry_url, ... } }
-   (match "exact" on an agent card → registry_url is the card; skip to 3)
+   Returns: { match, identifier, entry { url, type, ... } }
+   (match "exact" on an agent card → entry.url is the card; skip to 3)
 
-2. GET <registry_url>/agents/<identifier>
+2. GET <entry.url>/agents/<identifier>
    Returns: CatalogEntry { url (facts URL) }
 
 3. GET <catalogEntry.url>

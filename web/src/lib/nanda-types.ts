@@ -139,7 +139,8 @@ export interface ResolveResponse {
   /** The locator's short-name — the key to look up inside a catalog on a publisher match. */
   identifier: string;
   match: ResolveMatch;
-  index_record: IndexRecord;
+  /** The resolution entry, as an AI Catalog entry (paper §5.4). */
+  entry: IndexCatalogEntry;
 }
 
 export interface User {
@@ -165,20 +166,20 @@ export interface SearchResponse {
   results: IndexRecord[];
 }
 
-/** One ranked candidate agent returned by GET /api/v1/agentic-search. */
+/** One ranked candidate agent returned by GET /api/v1/agentic-search (AI Catalog field names). */
 export interface AgentCandidate {
   identifier: string;
-  display_name: string;
+  displayName: string;
   type: string;
   url: string;
   description: string | null;
   tags: string[];
   /** Publisher of the index entry the candidate was found through. */
   publisher?: PublisherBlock;
-  trust_manifest?: TrustManifest;
+  trustManifest?: TrustManifest;
   provenance: {
-    org_id: string;
-    registry_url: string;
+    orgId: string;
+    registryUrl: string;
     basis: "agent_search" | "single_agent_org" | "federated";
   };
   score: number;
@@ -187,8 +188,8 @@ export interface AgentCandidate {
 /** A matching ARD finder the requester should query directly. */
 export interface FinderReferral {
   identifier: string;
-  display_name: string;
-  search_url: string;
+  displayName: string;
+  searchUrl: string;
 }
 
 export interface AgenticSearchResponse {
@@ -197,9 +198,9 @@ export interface AgenticSearchResponse {
   candidates: AgentCandidate[];
   resolved: AgentCandidate | null;
   referrals: FinderReferral[];
-  orgs_queried: number;
-  orgs_unreachable: string[];
-  took_ms: number;
+  orgsQueried: number;
+  orgsUnreachable: string[];
+  tookMs: number;
 }
 
 export type HostingPath = "registry" | "dns-svcb" | "smb" | "personal";

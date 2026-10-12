@@ -1,5 +1,5 @@
-import type { IndexRecord } from './index-record.js';
-import { INDEX_RECORD_SCHEMA } from './index-record.js';
+import type { IndexEntry } from './index-entry.js';
+import { INDEX_ENTRY_SCHEMA } from './index-entry.js';
 
 /**
  * How the locator was matched:
@@ -15,18 +15,17 @@ export interface ResolveResponse {
   /** The locator's short-name — the key to look up inside a catalog on a publisher match. */
   readonly identifier: string;
   readonly match: ResolveMatch;
-  readonly index_record: IndexRecord;
+  /** The resolution entry as an AI Catalog entry (paper §5.4) — same shape as GET /api/v1/index. */
+  readonly entry: IndexEntry;
 }
-
-export { IndexRecord };
 
 export const resolveResponseSchema = {
   type: 'object',
-  required: ['locator', 'identifier', 'match', 'index_record'],
+  required: ['locator', 'identifier', 'match', 'entry'],
   properties: {
-    locator:      { type: 'string', minLength: 1 },
-    identifier:   { type: 'string', minLength: 1 },
-    match:        { type: 'string', enum: ['exact', 'publisher'] },
-    index_record: INDEX_RECORD_SCHEMA,
+    locator:    { type: 'string', minLength: 1 },
+    identifier: { type: 'string', minLength: 1 },
+    match:      { type: 'string', enum: ['exact', 'publisher'] },
+    entry:      INDEX_ENTRY_SCHEMA,
   },
 } as const;

@@ -42,9 +42,7 @@ from sm_arp import Identity, build_action, dat_grant_payload, issue_receipt
 from sm_dat import build_grant, sign_grant
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from concierge.authority import CATEGORIES, COUNTERPARTIES  # noqa: E402
-
-HERE = Path(__file__).resolve().parent.parent / "src" / "concierge" / "authority"
+from concierge.authority import CATEGORIES, COUNTERPARTIES, authority_dir  # noqa: E402
 
 DEFAULT_DAYS = 90
 
@@ -97,21 +95,33 @@ def main() -> int:
         ),
     )
 
-    HERE.mkdir(parents=True, exist_ok=True)
-    (HERE / "grant.json").write_text(json.dumps(dat, indent=2) + "\n")
-    (HERE / "grant-receipt.json").write_text(json.dumps(grant_receipt, indent=2) + "\n")
+    # The SAME directory the running agent reads, so minting and loading cannot
+    # disagree: ``CONCIERGE_AUTHORITY`` moves both or neither. A second
+    # deployment sets it and writes its own grant there, instead of overwriting
+    # the artifacts committed for the reference deployment.
+    out = authority_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "grant.json").write_text(json.dumps(dat, indent=2) + "\n")
+    (out / "grant-receipt.json").write_text(json.dumps(grant_receipt, indent=2) + "\n")
 
     print(f"host        {host.did}")
     print(f"grantee     {agent_did}")
     print(f"grant_id    {dat['grant_id']}")
     print(f"receipt_id  {grant_receipt['receipt_id']}")
     print(f"expires     {not_after}")
-    print(f"written     {HERE}")
+    print(f"written     {out}")
     if disposable:
         print(
             "\nNo HOST_SEED was given, so a host key was generated and discarded. "
             "The grant is valid and unforgeable; nobody can mint a replacement or a "
             "revocation for this host identity. Set HOST_SEED to keep that option."
+        )
+    if out == Path(__file__).resolve().parent.parent / "src" / "concierge" / "authority":
+        print(
+            "\nThis wrote into the tracked directory, which is where the reference "
+            "deployment's own grant lives. If this is a second deployment, set "
+            "CONCIERGE_AUTHORITY to a path of its own (a persistent volume, beside "
+            "CONCIERGE_HOME) and mint again — then `git checkout` the tracked files."
         )
     return 0
 

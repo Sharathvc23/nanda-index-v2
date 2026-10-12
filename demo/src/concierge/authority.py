@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -11,15 +12,44 @@ __all__ = [
     "CATEGORIES",
     "COUNTERPARTIES",
     "AuthorityError",
+    "authority_dir",
     "check_grant_covers",
     "grant",
     "grant_receipt",
     "grant_receipt_id",
     "host_did",
+    "mint_command",
     "summary",
 ]
 
-_HERE = Path(__file__).resolve().parent / "authority"
+#: The grant committed here belongs to the reference deployment, whose key is in
+#: that grant and nowhere else. A copy of this demo is a DIFFERENT agent — its
+#: key is its own, so its name is its own, and this grant does not name it.
+_BUNDLED = Path(__file__).resolve().parent / "authority"
+
+
+def authority_dir() -> Path:
+    """Where this deployment's grant lives.
+
+    Defaults to the committed artifacts, which is what the reference deployment
+    runs on. ``CONCIERGE_AUTHORITY`` points somewhere else, so anyone running
+    their own copy mints a grant into their own directory instead of editing a
+    tracked file that belongs to another agent. Mirrors ``CONCIERGE_HOME`` for
+    the signing key: identity and the authority over it are both
+    per-deployment, not properties of the source tree.
+    """
+    configured = os.environ.get("CONCIERGE_AUTHORITY", "").strip()
+    return Path(configured).expanduser() if configured else _BUNDLED
+
+
+def mint_command(agent_did: str = "did:key:z6Mk…") -> str:
+    """The command that fixes every refusal here.
+
+    Built rather than written into each message: a refusal that names the
+    problem and not the remedy is where someone running this demo stops.
+    """
+    return f"AGENT_DID='{agent_did}' python3 tools/mint_grant.py"
+
 
 #: What the host permits. Exactly the categories the scenario emits — a grant
 #: wider than the work it authorises is an authority nobody audited.
@@ -53,11 +83,11 @@ class AuthorityError(RuntimeError):
 
 
 def _load(name: str) -> dict[str, Any]:
-    path = _HERE / name
+    path = authority_dir() / name
     if not path.is_file():
         raise AuthorityError(
             f"{path} is missing. This agent runs under a delegated grant it cannot "
-            "mint for itself; see tools/mint_grant.py."
+            f"mint for itself. An operator mints one for this agent's key:\n\n    {mint_command()}\n"
         )
     return json.loads(path.read_text())
 
@@ -91,8 +121,14 @@ def check_grant_covers(agent_did: str) -> None:
     granted_to = dat.get("grantee_did")
     if granted_to != agent_did:
         raise AuthorityError(
-            f"the grant authorises {granted_to}, but this agent is {agent_did}. "
-            "Re-mint the grant for this key rather than running unauthorised."
+            f"the grant in {authority_dir()} authorises {granted_to}, but this agent is "
+            f"{agent_did}.\n\n"
+            "This is a different agent, not a misconfigured one: the name is derived from "
+            "the key, so a copy of this demo with its own key is its own agent and needs "
+            "its own grant. An operator mints one for this key:\n\n"
+            f"    {mint_command(agent_did)}\n\n"
+            "Running on somebody else's grant is the one thing this check exists to stop, "
+            "so there is deliberately no flag that skips it."
         )
     payload = grant_receipt()["action"].get("machine_payload") or {}
     if payload.get("granted_to_did") != agent_did:

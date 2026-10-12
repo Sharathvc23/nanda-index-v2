@@ -79,8 +79,37 @@ PYTHONPATH=src python3 -m concierge serve      # serve the page and the agent ca
 PYTHONPATH=src python3 tools/ci.py             # lint, types, tests, coverage
 ```
 
-Defaults point at the live hosted services, so a clean checkout runs without
-configuration. The test suite runs offline.
+Defaults point at the live hosted services, so `register`, `serve` and the test
+suite need no configuration. The suite runs offline.
+
+**`run` needs a grant of its own first**, and that refusal is the control
+working. Your copy generates its own signing key, the name is derived from the
+key, and the grant committed here names the reference deployment's key. So your
+copy is a *different agent* holding somebody else's grant, and it says so rather
+than acting on it. There is no flag that skips the check: an agent that can run
+on a grant not addressed to it has nothing to demonstrate.
+
+Two steps, in this order, because the grant names a key that has to exist first:
+
+```bash
+# 1. let the agent create its key, and read the did it derived
+PYTHONPATH=src python3 -m concierge serve &
+curl -s localhost:8080/healthz    # → {"did": "did:key:z6Mk…", "urn": "urn:ai:key:…/agent"}
+
+# 2. an operator mints a grant for THAT did, into this copy's own directory
+export CONCIERGE_AUTHORITY=~/.concierge-authority
+AGENT_DID='did:key:z6Mk…' HOST_SEED='your host key material' python3 tools/mint_grant.py
+```
+
+`HOST_SEED` is the host's key material and belongs to whoever is delegating.
+Omit it and the tool generates one and discards it: the grant is still valid and
+unforgeable, but nobody can ever mint a replacement or a revocation for that host
+identity, and the tool says so.
+
+Set `CONCIERGE_BASE_URL` to a public address before `register`. Without it the
+card URL falls back to `http://localhost:8080` and `register` refuses — the
+second index's log is append-only, so a pointer at an address nobody else can
+reach cannot be withdrawn afterwards.
 
 ## Configuration
 
@@ -89,6 +118,7 @@ Copy `.env.example` and set what you need.
 | Variable | Meaning |
 |---|---|
 | `CONCIERGE_HOME` | where the signing key lives. Use a persistent volume — the agent's name comes from its key, so losing it means becoming someone else |
+| `CONCIERGE_AUTHORITY` | where this copy's grant and grant receipt live. Defaults to the artifacts committed in `src/concierge/authority/`, which are the reference deployment's. Set it for any other copy and mint into it — see [Run it](#run-it) |
 | `CONCIERGE_BASE_URL` | this agent's own address; its card and its index entry are both built from it |
 | `PUBLIC_INDEX_URL` | the index v2 used for search (default `https://api.nandaindex.org`) |
 | `CONCIERGE_INDEX_URL` | the second index, which the restaurant checks callers against |

@@ -125,9 +125,21 @@ def test_running_streams_steps_onto_the_page(page):
     assert not page.errors, page.errors
 
 
-def test_the_run_button_is_disabled_while_a_run_is_in_flight(page):
+def test_the_run_button_is_disabled_while_a_run_is_in_flight(page, run_gate):
+    """A second click must not start a second booking.
+
+    The run is HELD open rather than raced: the stub finishes in microseconds, so
+    sampling the button straight after the click asserted against whichever
+    thread won — about one failure in four with nothing wrong with the page. With
+    the run held, the disabled state is guaranteed to exist while it is checked,
+    and both edges are asserted as transitions: disabled while in flight, enabled
+    again once it finishes.
+    """
     page.click("#run")
-    assert page.is_disabled("#run"), "a second click would start a second booking"
+    assert run_gate.wait_until_running(), "the stubbed run never started, so nothing was in flight"
+    page.wait_for_function("() => document.getElementById('run').disabled", timeout=10000)
+
+    run_gate.release()
     page.wait_for_function("() => !document.getElementById('run').disabled", timeout=20000)
 
 

@@ -1,0 +1,10 @@
+**/__pycache__
+**/*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.concierge/
+receipts/
+coverage.json
+**/*.egg-info
+tests/

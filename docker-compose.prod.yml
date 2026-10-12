@@ -6,7 +6,7 @@
 #
 # Caddy exposes (open these ports in your Droplet firewall):
 #   :80  → HTTP (redirects to HTTPS automatically)
-#   :443 → nandaindex.org (web) + api.nandaindex.org (API)
+#   :443 → nandaindex.org (web, /demo → concierge demo) + api.nandaindex.org (API)
 #
 # Postgres is internal only — not reachable from outside.
 
@@ -70,6 +70,31 @@ services:
       - server
     restart: unless-stopped
 
+  # The concierge demo, served at https://nandaindex.org/demo (see Caddyfile).
+  # Its signing key, grant and last run live on the demo_data volume: the agent's
+  # name is derived from the key, so losing the volume makes it a different,
+  # unregistered, unauthorised agent. No port is published — only Caddy reaches
+  # it, which is what makes X-Forwarded-For trustworthy for the run limit.
+  demo:
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    environment:
+      PORT: 8080
+      CONCIERGE_BASE_URL: ${DEMO_BASE_URL:-https://nandaindex.org/demo}
+      CONCIERGE_HOME: /data/concierge
+      CONCIERGE_AUTHORITY: /data/authority
+      CONCIERGE_LAST_RUN: /data/last-run.json
+      CONCIERGE_RECEIPTS: /data/receipts
+      CONCIERGE_BEHIND_PROXY: "1"
+      # Live runs per visitor per hour; each one messages two companies' agents
+      # and holds a real table under the host's grant. 0 disables the limit.
+      RUN_LIMIT_PER_HOUR: ${DEMO_RUN_LIMIT_PER_HOUR:-3}
+      PUBLIC_INDEX_URL: ${DEMO_PUBLIC_INDEX_URL:-https://api.nandaindex.org}
+    volumes:
+      - demo_data:/data
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
     ports:
@@ -83,9 +108,11 @@ services:
     depends_on:
       - server
       - web
+      - demo
     restart: unless-stopped
 
 volumes:
+  demo_data:
   db_data:
   caddy_data:
   caddy_config:

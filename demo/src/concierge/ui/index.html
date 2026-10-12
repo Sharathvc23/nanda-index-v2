@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concierge — NANDA Demo</title>
+<meta name="description" content="An AI agent arranges lunch between two people whose companies each run their own agents.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* House sheet: white ground, ink text, two greys, thin rules, no colour.
+   Status is carried by shape and words, never by hue — "the service answered"
+   and "the request was refused" must not be able to look like the same fact. */
+:root{
+  --bg:#ffffff; --ink:#111111; --muted:#5f5f5f; --faint:#8d8d8d;
+  --rule:rgba(17,17,17,.14); --rule-soft:rgba(17,17,17,.07); --wash:#f7f7f6;
+  --sans:'Inter','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --pad-x:clamp(16px,5vw,56px); --maxw:1020px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;
+     -webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--pad-x)}
+
+header{border-bottom:1px solid var(--rule);padding:38px 0 22px}
+h1{font-size:clamp(23px,3.4vw,31px);font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+.lede{color:var(--muted);margin:0;max-width:60ch;font-size:15px}
+.ident{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:14px;
+       word-break:break-all;line-height:1.7}
+
+/* the request */
+.ask{border:1px solid var(--rule);margin:26px 0 0;padding:20px 22px;background:var(--wash)}
+.ask h2{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+        color:var(--faint);margin:0 0 10px}
+.ask p{margin:0 0 16px;font-size:16.5px;max-width:58ch}
+button{font:500 14px/1 var(--sans);background:var(--ink);color:#fff;border:1px solid var(--ink);
+       padding:11px 18px;cursor:pointer;letter-spacing:.01em}
+button:hover:not(:disabled){background:#000}
+button:disabled{background:var(--bg);color:var(--faint);border-color:var(--rule);cursor:default}
+button.ghost{background:var(--bg);color:var(--ink);border-color:var(--rule)}
+button.ghost:hover:not(:disabled){background:var(--wash)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.note{font-size:13px;color:var(--muted);margin:12px 0 0}
+
+.brief{margin:26px 0 0;border-top:1px solid var(--rule-soft);padding:20px 0 0}
+.brief h2{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+          color:var(--faint);margin:0 0 12px}
+ul.parties{margin:0;padding:0;list-style:none;display:grid;gap:16px}
+ul.parties li{display:grid;grid-template-columns:130px 1fr;gap:4px 20px}
+ul.parties .role{font:600 11px/1.5 var(--sans);letter-spacing:.07em;text-transform:uppercase;
+                 color:var(--faint)}
+ul.parties .body strong{font-weight:600}
+ul.parties .body p{margin:2px 0 0;font-size:13.5px;color:var(--muted);max-width:60ch}
+ul.parties .m{font-family:var(--mono);font-size:11px;color:var(--faint);word-break:break-all}
+@media(max-width:560px){ul.parties li{grid-template-columns:1fr}}
+
+/* phases */
+.phase{margin:0 0 30px}
+.phase-head{border-top:1px solid var(--rule);padding:16px 0 0}
+.phase-num{font:500 11px/1 var(--mono);color:var(--faint);letter-spacing:.09em;
+           text-transform:uppercase}
+.phase h3{margin:7px 0 7px;font-size:17px;font-weight:600;letter-spacing:-.005em}
+.phase .what{margin:0 0 4px;color:var(--muted);font-size:14.5px;max-width:66ch}
+.phase.idle{opacity:.45}
+.valid{border-left:2px solid var(--ink);background:var(--wash);padding:12px 15px;margin:14px 0 0;
+       max-width:70ch}
+.valid .lbl{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+            color:var(--faint);margin:0 0 5px}
+.valid p{margin:0;font-size:13.5px;color:var(--ink)}
+
+/* tabs */
+nav.tabs{display:flex;gap:26px;border-bottom:1px solid var(--rule);margin:34px 0 0}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--faint);
+                padding:0 0 11px;font:500 14px/1 var(--sans);cursor:pointer;letter-spacing:.01em}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.panel{display:none;padding:26px 0 70px}
+.panel.on{display:block}
+
+/* walkthrough */
+ol.steps{list-style:none;margin:14px 0 0;padding:0}
+li.step{border-bottom:1px solid var(--rule-soft);padding:18px 0 18px 46px;position:relative}
+li.step:first-child{border-top:1px solid var(--rule-soft)}
+li.step .n{position:absolute;left:0;top:20px;width:28px;height:28px;border:1px solid var(--rule);
+           display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--mono);
+           color:var(--muted)}
+li.step.refused .n{border-width:2px;border-color:var(--ink);color:var(--ink)}
+li.step h3{margin:0 0 6px;font-size:16px;font-weight:600}
+li.step .subj{margin:0 0 3px;font:500 11px/1 var(--sans);letter-spacing:.07em;
+              text-transform:uppercase;color:var(--faint)}
+li.step .plain{margin:0;color:var(--muted);font-size:14.5px;max-width:64ch}
+li.step .outcome{margin:11px 0 0;font-family:var(--mono);font-size:12.5px;color:var(--ink);
+                 background:var(--wash);border-left:2px solid var(--rule);padding:8px 11px;
+                 max-width:72ch;word-break:break-word}
+li.step.refused .outcome{border-left-width:3px;border-left-color:var(--ink)}
+.nc{margin:11px 0 0;padding:0;list-style:none;font-size:13px;color:var(--faint);max-width:64ch}
+.nc li{padding-left:15px;position:relative}
+.nc li::before{content:"—";position:absolute;left:0}
+.nc .lbl{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+         color:var(--faint);margin:0 0 4px}
+
+/* summary */
+.summary{border:1px solid var(--ink);padding:20px 22px;margin:26px 0 0}
+.summary h3{margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:.09em;
+            text-transform:uppercase;color:var(--faint)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:7px 20px;margin:0;font-size:14px}
+dt{color:var(--muted)}
+dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
+
+/* receipts */
+.rcpt{border:1px solid var(--ink);padding:18px 20px;margin:0 0 24px}
+.rcpt h3{margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+         color:var(--faint)}
+.rcpt .who{margin:14px 0 3px;font-size:14px;font-weight:600}
+.rcpt .who:first-of-type{margin-top:10px}
+.rcpt p{margin:0 0 3px;font-size:13.5px;color:var(--muted);max-width:66ch}
+.rcpt .m{font-family:var(--mono);font-size:11.5px;color:var(--ink);word-break:break-all}
+.rcpt .none{color:var(--faint)}
+
+/* capability search */
+.capsearch{margin:0 0 34px;padding:0 0 30px;border-bottom:1px solid var(--rule)}
+.capsearch h3{margin:0 0 8px;font-size:17px;font-weight:600;color:var(--ink)}
+.capbox{display:flex;gap:8px;margin:14px 0 10px;flex-wrap:wrap}
+.capbox input{flex:1 1 240px;min-width:0;font:400 14px/1.3 var(--mono);color:var(--ink);
+              padding:10px 12px;border:1px solid var(--rule);background:var(--bg)}
+.capbox input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(17,17,17,.12)}
+.capbox input:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.capbox button{font:600 12px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+               padding:11px 18px;border:1px solid var(--ink);background:var(--ink);
+               color:var(--bg);cursor:pointer}
+.capbox button:hover{background:var(--bg);color:var(--ink)}
+.capbox button:disabled{opacity:.45;cursor:default;background:var(--ink);color:var(--bg)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px}
+.chips span{font-size:12px;color:var(--faint);padding:4px 0 0}
+.chips button{font:400 12px/1 var(--mono);padding:5px 10px;border:1px solid var(--rule);
+              background:var(--bg);color:var(--muted);cursor:pointer}
+.chips button:hover{border-color:var(--ink);color:var(--ink)}
+.caporg{margin:0 0 16px}
+.caporg h4{margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.09em;
+           text-transform:uppercase;color:var(--faint)}
+.caprow{border:1px solid var(--rule-soft);padding:12px 15px;margin:0 0 8px}
+.caprow .nm{font-size:14.5px;font-weight:600;color:var(--ink)}
+.caprow .id{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:2px 0 0}
+.caprow a{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all;
+          text-decoration:none;display:inline-block;margin:4px 0 0}
+.caprow a:hover{color:var(--ink);text-decoration:underline}
+.captags{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0 0}
+.captags em{font:400 11px/1 var(--mono);font-style:normal;padding:4px 8px;
+            border:1px solid var(--rule-soft);color:var(--faint)}
+.captags em.hit{border-color:var(--ink);color:var(--ink);font-weight:600}
+.capnote{font-size:13px;color:var(--faint);margin:10px 0 0}
+.caprow .src{font-size:12.5px;color:var(--faint);margin:6px 0 0}
+
+.statusrow{display:flex;align-items:baseline;gap:0}
+.again{font:600 10.5px/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;
+       margin-left:10px;padding:4px 9px;border:1px solid var(--rule);background:var(--bg);
+       color:var(--muted);cursor:pointer;vertical-align:1px}
+.again:hover{border-color:var(--ink);color:var(--ink)}
+.again:disabled{opacity:.45;cursor:default}
+
+/* references */
+.refgroup{margin:0 0 26px}
+.refgroup h4{margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:.09em;
+             text-transform:uppercase;color:var(--faint)}
+.reflist{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.ref{border:1px solid var(--rule-soft);padding:13px 15px;display:grid;
+     grid-template-columns:auto 1fr auto;gap:3px 12px;align-items:start}
+.ref .dot{grid-row:1/span 3;width:9px;height:9px;border-radius:50%;margin-top:6px;flex:0 0 auto}
+.ref .dot.online{background:#1a7f4f}
+.ref .dot.degraded{background:#9a6a10}
+.ref .dot.offline{background:#b3261e}
+.ref .nm{font-size:14.5px;font-weight:600;color:var(--ink)}
+.ref .st{grid-row:1;grid-column:3;font:600 10.5px/1 var(--sans);letter-spacing:.05em;
+         text-transform:uppercase;color:var(--muted);white-space:nowrap;padding-top:3px}
+.ref a{grid-column:2;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+       word-break:break-all;text-decoration:none}
+.ref a:hover{color:var(--ink);text-decoration:underline}
+.ref .nt{grid-column:2;font-size:13px;color:var(--faint);margin:2px 0 0}
+.ref .fx{grid-column:2;font-family:var(--mono);font-size:11px;color:var(--faint);margin:3px 0 0}
+@media(max-width:560px){.ref{grid-template-columns:auto 1fr}.ref .st{grid-column:2;grid-row:auto}}
+
+/* technical */
+.tech-intro{color:var(--muted);font-size:14px;max-width:64ch;margin:0 0 20px}
+.blk{border:1px solid var(--rule-soft);margin:0 0 12px}
+.blk summary{cursor:pointer;padding:11px 14px;font:500 12.5px/1.4 var(--mono);background:var(--wash);
+             display:flex;gap:12px;align-items:center;justify-content:space-between}
+/* The default marker is hidden and replaced, because it renders differently in
+   every browser and this one has to line up with a monospace row. */
+.blk summary::-webkit-details-marker{display:none}
+.blk summary::marker{content:""}
+.blk summary .lead{display:flex;align-items:center;gap:10px;min-width:0}
+.blk summary .caret{flex:0 0 auto;width:0;height:0;border-left:5px solid var(--faint);
+                    border-top:4px solid transparent;border-bottom:4px solid transparent;
+                    transition:transform .12s ease}
+.blk[open] summary .caret{transform:rotate(90deg)}
+.blk summary:hover{background:#f1f1ef}
+.blk summary:hover .caret{border-left-color:var(--ink)}
+.blk summary .id{color:var(--muted);font-size:11.5px;flex:0 0 auto}
+.blk pre{margin:0;padding:14px;overflow-x:auto;font-family:var(--mono);font-size:11.5px;
+         line-height:1.65;background:var(--bg);border-top:1px solid var(--rule-soft)}
+/* step-by-step player: one step at a time, on a map of who is talking to whom.
+   Same rule as the rest of the sheet — status by shape and words, never hue. */
+.stage{border:1px solid var(--rule);margin:0 0 30px;padding:18px 20px 20px}
+.stage-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.stage-head h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+               color:var(--faint)}
+.stage-ctl{display:flex;gap:6px}
+.stage-ctl button{padding:8px 13px;font-size:13px}
+ol.track{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:5px;min-height:28px}
+ol.track li.gap{width:10px}
+ol.track button{width:28px;height:28px;padding:0;font:500 11.5px/1 var(--mono);background:var(--bg);
+                color:var(--faint);border:1px dashed var(--rule)}
+ol.track button.seen{color:var(--ink);border:1px solid var(--rule)}
+ol.track button.refused{border:2px solid var(--ink)}
+ol.track button.on{background:var(--ink);color:#fff;border:1px solid var(--ink)}
+.stage-body{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;margin:16px 0 0}
+.map svg{width:100%;height:auto;display:block}
+.map .edge{fill:none;stroke:var(--rule);stroke-width:1.2}
+.map .edge.used{stroke:var(--muted)}
+.map .edge.on{stroke:var(--ink);stroke-width:2.4;stroke-dasharray:7 5;animation:flow .9s linear infinite}
+.map .node rect{fill:var(--bg);stroke:var(--rule);stroke-width:1}
+.map .node text{font-family:var(--sans);font-size:14px;fill:var(--faint)}
+.map .node text.sub{font-family:var(--mono);font-size:10.5px}
+.map .node.used rect{stroke:var(--ink)}
+.map .node.used text{fill:var(--ink)}
+.map .node.used text.sub{fill:var(--muted)}
+.map .node.on rect{fill:var(--ink);stroke:var(--ink)}
+.map .node.on text{fill:#fff}
+.map .node.on.refused rect{fill:var(--bg);stroke-width:3;stroke-dasharray:5 3}
+.map .node.on.refused text{fill:var(--ink)}
+.map .grp{font:600 10.5px var(--sans);letter-spacing:.09em;fill:var(--faint);text-transform:uppercase}
+.map .packet{fill:var(--ink)}
+.map .packet.back{fill:var(--bg);stroke:var(--ink);stroke-width:2}
+@keyframes flow{to{stroke-dashoffset:-24}}
+@media (prefers-reduced-motion:reduce){.map .edge.on{animation:none}}
+.card{min-width:0}
+.card .c-meta{margin:0;font:500 11px/1.5 var(--mono);color:var(--faint);letter-spacing:.04em}
+.card h4{margin:6px 0 8px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.card .c-route{margin:0 0 10px;font-size:13.5px;color:var(--muted)}
+.card .c-route b{color:var(--ink);font-weight:600}
+.card .c-plain{margin:0 0 12px;font-size:14.5px;color:var(--muted)}
+.card .c-io{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;margin:0 0 12px;
+            font-size:13px}
+.card .c-io dt{color:var(--faint)}
+.card .c-io dd{margin:0;font-family:var(--mono);font-size:12px;word-break:break-all}
+.card .c-io .sec{grid-column:1/-1;font:600 10.5px/1 var(--sans);letter-spacing:.09em;
+                 text-transform:uppercase;color:var(--faint);margin:6px 0 0}
+.card .c-out{margin:0;font-family:var(--mono);font-size:12.5px;background:var(--wash);
+             border-left:2px solid var(--rule);padding:8px 11px;word-break:break-word}
+.card .c-out.refused{border-left:4px solid var(--ink)}
+.card .c-verdict{display:inline-block;font:600 10.5px/1 var(--sans);letter-spacing:.08em;
+                 text-transform:uppercase;border:2px solid var(--ink);padding:4px 7px;margin:0 0 8px}
+.card .c-why{margin:12px 0 0;font-size:13px;color:var(--ink);border-left:2px solid var(--ink);
+             padding:2px 0 2px 11px}
+.card .c-wait{margin:12px 0 0;font-size:12.5px;color:var(--faint)}
+li.step{cursor:pointer;transition:opacity .2s}
+li.step.ahead{opacity:.32}
+li.step.now .n{background:var(--ink);color:#fff;border-color:var(--ink)}
+@media(max-width:760px){.stage-body{grid-template-columns:1fr}.map{display:none}}
+.empty{color:var(--faint);font-size:14px;padding:22px 0}
+.status{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 18px;min-height:17px}
+@media(max-width:560px){
+  li.step{padding-left:0}
+  li.step .n{position:static;margin:0 0 10px}
+  dl{grid-template-columns:1fr;gap:2px 0}
+  dt{margin-top:9px}
+}
+</style>
+
+<header><div class="wrap">
+  <h1>Concierge</h1>
+  <p class="lede">An AI agent arranges lunch between two people whose companies each run their own
+    agents. It finds each company, works out who to ask, checks a restaurant and books a table
+    &mdash; keeping a signed record of every step, including the ones that were refused.</p>
+  <p class="ident" id="ident"></p>
+</div></header>
+
+<div class="wrap">
+  <section class="ask">
+    <h2>The request</h2>
+    <p id="request">&nbsp;</p>
+    <div class="controls">
+      <button id="run">Run this request</button>
+      <button id="replay" class="ghost">Show the last run</button>
+    </div>
+    <p class="note" id="run-note">This books a real table at the demo restaurant and writes to both companies&rsquo;
+       agents. It takes about a minute.</p>
+  </section>
+
+  <section class="brief">
+    <h2>Who is involved</h2>
+    <ul class="parties" id="parties"></ul>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="Views of this run">
+    <button id="t-plain" role="tab" aria-selected="true" aria-controls="p-plain" tabindex="0">What happens</button>
+    <button id="t-tech"  role="tab" aria-selected="false" aria-controls="p-tech" tabindex="-1">Technical detail</button>
+    <button id="t-refs"  role="tab" aria-selected="false" aria-controls="p-refs" tabindex="-1">References</button>
+  </nav>
+
+  <section id="p-plain" class="panel on" role="tabpanel" aria-labelledby="t-plain">
+    <section class="stage" aria-labelledby="stage-title">
+      <div class="stage-head">
+        <h3 id="stage-title">Step by step</h3>
+        <div class="stage-ctl">
+          <button id="st-prev" class="ghost" type="button" disabled>&larr; Back</button>
+          <button id="st-play" class="ghost" type="button" disabled>Pause</button>
+          <button id="st-next" class="ghost" type="button" disabled>Next &rarr;</button>
+        </div>
+      </div>
+      <ol class="track" id="st-track" aria-label="Steps so far"></ol>
+      <div class="stage-body">
+        <div class="map" id="st-map" aria-hidden="true"></div>
+        <article class="card" id="st-card" aria-live="polite"></article>
+      </div>
+    </section>
+    <p class="status" id="status-plain" role="status" aria-live="polite">Press &ldquo;Run this request&rdquo; to start.</p>
+    <div id="phases"></div>
+    <div id="summary"></div>
+  </section>
+
+  <section id="p-refs" class="panel" role="tabpanel" aria-labelledby="t-refs">
+    <p class="tech-intro">Every service this demo depends on, checked from the server when you
+      opened this tab. A light means this agent reached that address and got an answer it
+      recognises &mdash; not that the service is correct, and not that it will still be there when
+      you click.</p>
+    <div class="capsearch">
+      <h3>Find an agent by what it does</h3>
+      <p class="tech-intro">Neither index answers this. The public index searches organisation
+        names only &mdash; its records carry tags, but the search does not read them, and the records
+        cannot be edited. The second index holds no capability information at all, by design.
+        So this asks each organisation directly, reading the catalog it publishes and matching
+        the tags it declares for its own agents.</p>
+      <div class="capbox">
+        <input id="cap-q" list="cap-vocab" autocomplete="off" spellcheck="false"
+               placeholder="orbital-analysis" aria-label="Capability to search for">
+        <datalist id="cap-vocab"></datalist>
+        <button id="cap-go" type="button">Search</button>
+      </div>
+      <p class="chips"><span>Try</span>
+        <button type="button" data-cap="orbital-analysis">orbital-analysis</button>
+        <button type="button" data-cap="leadership">leadership</button>
+        <button type="button" data-cap="strategy">strategy</button>
+      </p>
+      <p class="status" id="status-cap" role="status" aria-live="polite">Three organisations, searched live.</p>
+      <div id="cap-results"></div>
+    </div>
+
+    <p class="statusrow">
+      <span class="status" id="status-refs" role="status" aria-live="polite">Checking&hellip;</span>
+      <button id="refs-again" type="button" class="again">Check again</button></p>
+    <div id="refs"></div>
+  </section>
+
+  <section id="p-tech" class="panel" role="tabpanel" aria-labelledby="t-tech">
+    <p class="tech-intro">Select an entry to open it; opening one closes the last. Every step exactly as it was recorded: the signed receipt, its SHA-256 digest, and the link
+      to the previous entry. Each entry commits to the one before it, so a step removed after the
+      fact is visible even though nothing of it remains.</p>
+    <p class="status" id="status-tech" role="status" aria-live="polite"></p>
+    <div id="receipts"></div>
+    <div id="raw"><p class="empty">No run yet.</p></div>
+  </section>
+</div>
+
+<script>
+const BASE = location.pathname.replace(/\/+$/, '') + '/';
+const $ = id => document.getElementById(id);
+const phasesBox = $('phases'), raw = $('raw'), summaryBox = $('summary');
+let source = null, PHASES = [];
+
+/* tabs */
+const TABS = [['t-plain','p-plain'], ['t-tech','p-tech'], ['t-refs','p-refs']];
+
+function selectTab(tab, { focus = false } = {}) {
+  for (const [t, p] of TABS) {
+    const on = t === tab;
+    $(t).setAttribute('aria-selected', String(on));
+    /* Roving tabindex: the tablist is ONE stop in the tab order and the arrows
+       move within it. Three stops makes a keyboard user walk past every view to
+       reach the content. */
+    $(t).tabIndex = on ? 0 : -1;
+    $(p).classList.toggle('on', on);
+  }
+  if (focus) $(tab).focus();
+  // Probed when the tab is opened, not on page load: nine hosts is not a cost to
+  // pay for a reader who never looks.
+  if (tab === 't-refs') { loadReferences(); loadVocabulary(); }
+}
+
+for (const [tab] of TABS) {
+  $(tab).addEventListener('click', () => selectTab(tab));
+  $(tab).addEventListener('keydown', e => {
+    const names = TABS.map(([t]) => t);
+    const here = names.indexOf(tab);
+    let next = null;
+    if (e.key === 'ArrowRight') next = names[(here + 1) % names.length];
+    else if (e.key === 'ArrowLeft') next = names[(here - 1 + names.length) % names.length];
+    else if (e.key === 'Home') next = names[0];
+    else if (e.key === 'End') next = names[names.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    selectTab(next, { focus: true });
+  });
+}
+
+/* A status light is a claim about now. The first version loaded once per page
+   and never looked again, so a tab left open kept showing whatever was true when
+   it was opened — including, after a domain change, an address that no longer
+   existed. Re-checked whenever the tab is opened and the last answer has aged
+   out, and on demand. */
+const REFS_STALE_AFTER_MS = 60000;
+let refsCheckedAt = 0;
+let refsInFlight = false;
+async function loadReferences(force) {
+  if (refsInFlight) return;
+  if (!force && refsCheckedAt && Date.now() - refsCheckedAt < REFS_STALE_AFTER_MS) return;
+  refsInFlight = true;
+  const again = $('refs-again');
+  if (again) again.disabled = true;
+  $('status-refs').textContent = 'Checking\u2026';
+  try {
+    const d = await fetch(BASE + 'references').then(r => r.json());
+    const groups = new Map();
+    for (const r of d.references) {
+      if (!groups.has(r.kind)) groups.set(r.kind, []);
+      groups.get(r.kind).push(r);
+    }
+    const down = d.references.filter(r => r.status !== 'online').length;
+    $('status-refs').textContent = down
+      ? `${d.references.length} services checked, ${down} not answering \u2014 ${d.checked_at}`
+      : `${d.references.length} services checked, all answering \u2014 ${d.checked_at}`;
+    $('refs').innerHTML = [...groups].map(([kind, rows]) => `
+      <div class="refgroup"><h4>${esc(kind)}</h4><ul class="reflist">${rows.map(r => `
+        <li class="ref">
+          <span class="dot ${esc(r.status)}" aria-hidden="true"></span>
+          <span class="nm">${esc(r.name)}</span>
+          <span class="st">${esc(r.status)}</span>
+          <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>
+          ${r.note ? `<p class="nt">${esc(r.note)}</p>` : ''}
+          <p class="fx">${esc(r.detail)}${r.extra ? ' \u00B7 ' + esc(Object.entries(r.extra).map(([k,v]) => `${k} ${v}`).join(' \u00B7 ')) : ''}</p>
+        </li>`).join('')}</ul></div>`).join('');
+  } catch (err) {
+    $('status-refs').textContent = 'Could not check the services: ' + err.message;
+  } finally {
+    refsCheckedAt = Date.now();
+    refsInFlight = false;
+    const b = $('refs-again');
+    if (b) b.disabled = false;
+  }
+}
+
+$('refs-again').addEventListener('click', () => loadReferences(true));
+
+/* Cross-organisation capability search.
+
+   Run on the server, like the reference probes and for the same reason: the
+   organisation servers send no CORS headers for their catalogs, so a fetch from
+   this page fails before it learns anything. */
+let vocabLoaded = false;
+async function loadVocabulary() {
+  if (vocabLoaded) return;
+  vocabLoaded = true;
+  try {
+    const d = await fetch(BASE + 'vocabulary').then(r => r.json());
+    $('cap-vocab').innerHTML = d.capabilities
+      .map(c => `<option value="${esc(c.name)}">${esc(c.orgs.join(', '))}</option>`).join('');
+    $('status-cap').textContent =
+      `${d.capabilities.length} capabilities published across three organisations.`;
+  } catch (err) {
+    /* The search still works typed; only the suggestions are missing. */
+    $('status-cap').textContent = 'Three organisations, searched live.';
+  }
+}
+
+async function searchCapability(term) {
+  const q = (term || $('cap-q').value || '').trim();
+  if (!q) return;
+  $('cap-q').value = q;
+  $('cap-go').disabled = true;
+  $('status-cap').textContent = 'Asking three organisations\u2026';
+  $('cap-results').innerHTML = '';
+  try {
+    const d = await fetch(BASE + 'capability?q=' + encodeURIComponent(q)).then(r => r.json());
+    if (d.error) throw new Error(d.detail || d.error);
+
+    const orgs = d.orgs_claiming.length;
+    const n = d.matches.length;
+    /* Counted, not hard-coded: when an organisation does not answer, "3" would
+       be a claim about a search that did not happen. */
+    const many = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+    $('status-cap').textContent = n === 0
+      ? `No agent in ${many(d.searched.length, 'organisation')} publishes \u201C${q}\u201D.`
+      : `${many(n, 'agent')} in ${many(orgs, 'organisation')} `
+        + `publish${n === 1 ? 'es' : ''} \u201C${q}\u201D.`;
+
+    const byOrg = new Map();
+    for (const m of d.matches) {
+      if (!byOrg.has(m.org)) byOrg.set(m.org, []);
+      byOrg.get(m.org).push(m);
+    }
+    const wanted = q.toLowerCase();
+    /* Skills come from the agent's own AgentFacts; tags are what its
+       organisation says. Where only the catalog was readable the match is
+       weaker, and must not be drawn as though the agent said it. */
+    $('cap-results').innerHTML = [...byOrg].map(([org, rows]) => `
+      <div class="caporg"><h4>${esc(org)}</h4>${rows.map(m => {
+        const claims = (m.skills && m.skills.length ? m.skills : m.tags) || [];
+        return `
+        <div class="caprow">
+          <div class="nm">${esc(m.display_name)}</div>
+          <div class="id">${esc(m.identifier)}</div>
+          <a href="${esc(m.facts_url || m.url)}" target="_blank" rel="noopener">${esc(m.facts_url || m.url)}</a>
+          <div class="captags">${claims.map(t =>
+            `<em class="${String(t).toLowerCase() === wanted ? 'hit' : ''}">${esc(t)}</em>`).join('')}</div>
+          <p class="src">${m.source === 'org'
+            ? 'This agent could not be asked directly, so this is its organisation&rsquo;s claim about it.'
+            : 'Published by the agent itself.'}</p>
+        </div>`;}).join('')}</div>`).join('');
+
+    /* Two things a reader must be told, because a list alone implies neither. */
+    const notes = [];
+    if (!d.complete) {
+      notes.push('Not every organisation answered: '
+        + Object.keys(d.unreachable).map(esc).join(', ')
+        + '. This result is partial, which is not the same as nobody claiming it.');
+    }
+    if (n > 0) {
+      notes.push('Read from each agent\u2019s own published description. '
+        + 'That the agent claims this capability \u2014 not that it can do it, '
+        + 'and not that anything verified the claim.');
+    }
+    /* An organisation claiming more for an agent than the agent claims for
+       itself is a finding, not a detail to resolve quietly. */
+    const dv = (d.divergences || []).filter(x => (x.claimed_by_org_only || []).length);
+    if (dv.length) {
+      $('cap-results').insertAdjacentHTML('beforeend', `
+        <div class="caporg"><h4>Where the organisation and the agent disagree</h4>
+          ${dv.map(x => `<div class="caprow">
+            <div class="nm">${esc(x.identifier)}</div>
+            <p class="src">${esc(x.org)} lists
+              ${x.claimed_by_org_only.map(t => `<b>${esc(t)}</b>`).join(', ')}
+              for this agent. The agent does not claim ${x.claimed_by_org_only.length > 1 ? 'them' : 'it'}.</p>
+          </div>`).join('')}
+          <p class="capnote">Searching uses what the agent publishes. A directory may describe
+            its members however it likes; it is not the authority on what they do.</p>
+        </div>`);
+    }
+    if (notes.length) {
+      $('cap-results').insertAdjacentHTML('beforeend',
+        notes.map(t => `<p class="capnote">${esc(t)}</p>`).join(''));
+    }
+  } catch (err) {
+    $('status-cap').textContent = 'Could not search the organisations: ' + err.message;
+  } finally {
+    $('cap-go').disabled = false;
+  }
+}
+
+$('cap-go').addEventListener('click', () => searchCapability());
+$('cap-q').addEventListener('keydown', e => { if (e.key === 'Enter') searchCapability(); });
+for (const b of document.querySelectorAll('.chips button')) {
+  b.addEventListener('click', () => searchCapability(b.dataset.cap));
+}
+
+function esc(t) {
+  return String(t).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setStatus(t) { $('status-plain').textContent = t; $('status-tech').textContent = t; }
+
+/* ── step-by-step player ────────────────────────────────────────────────────
+   A run lands thirteen steps in a few seconds, faster than anyone can read.
+   Steps are kept as they arrive and SHOWN one at a time, on a map of who the
+   concierge is talking to, until the reader catches up. The full list below
+   stays complete; the player only decides which entry is "now". */
+const DWELL_MS = 4500;
+const payloadOf = s => (s.entry && s.entry.action && s.entry.action.machine_payload) || {};
+const partyOf = s => (s.entry && s.entry.action && s.entry.action.counterparty_label) || '';
+
+let NODES = [];
+const player = { steps: [], at: -1, playing: true, timer: null, finished: false };
+
+function buildNodes(cfg) {
+  const host = u => String(u || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const guests = cfg.guests || [];
+  NODES = [
+    { key: 'index:public', group: 'Directories', label: 'NANDA Index', sub: host(cfg.index) },
+    { key: 'index:second', group: 'Directories', label: 'Second index', sub: 'name → address' },
+    ...guests.map(g => ({ key: 'org:' + g.agent.split('-')[0], group: 'Companies',
+                          label: g.company, sub: 'publishes its agent catalog' })),
+    ...guests.map(g => ({ key: 'agent:' + g.agent, group: 'Guest agents',
+                          label: g.who.replace(/^the /, ''), sub: g.agent })),
+    { key: 'venue:nanda-demo', group: 'Restaurant', label: 'The restaurant', sub: host(cfg.venue) },
+  ];
+}
+
+function nodeLabel(key) {
+  const n = NODES.find(x => x.key === key);
+  return n ? n.label : key;
+}
+
+/* Laid out once; a step only changes classes on it. */
+function drawMap() {
+  const W = 500, NX = 240, NW = 256, NH = 40, CX = 2, CW = 150, CH = 58;
+  let y = 8, parts = [], lastGroup = '';
+  for (const n of NODES) {
+    if (n.group !== lastGroup) { y += lastGroup ? 14 : 0; parts.push(`<text class="grp" x="${NX}" y="${y + 10}">${esc(n.group)}</text>`); y += 18; lastGroup = n.group; }
+    n.y = y + NH / 2;
+    y += NH + 8;
+  }
+  const H = y + 4, cy = H / 2;
+  const edges = NODES.map(n =>
+    `<path class="edge" id="e-${esc(n.key)}" d="M${CX + CW} ${cy} C ${CX + CW + 50} ${cy}, ${NX - 50} ${n.y}, ${NX} ${n.y}"/>`).join('');
+  const nodes = NODES.map(n => `<g class="node" data-key="${esc(n.key)}">
+      <rect x="${NX}" y="${n.y - NH / 2}" width="${NW}" height="${NH}"/>
+      <text x="${NX + 12}" y="${n.y - 2}">${esc(n.label)}</text>
+      <text class="sub" x="${NX + 12}" y="${n.y + 12}">${esc(short(n.sub, 36))}</text></g>`).join('');
+  $('st-map').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img">
+    ${edges}${parts.join('')}${nodes}
+    <g class="node used" data-key="concierge">
+      <rect x="${CX}" y="${cy - CH / 2}" width="${CW}" height="${CH}"/>
+      <text x="${CX + 14}" y="${cy - 4}">The concierge</text>
+      <text class="sub" x="${CX + 14}" y="${cy + 13}">acting for the host</text></g>
+    <g id="st-packets"></g></svg>`;
+}
+
+function mark(s) {
+  const map = $('st-map');
+  if (!map.firstChild) return;
+  const used = new Set(player.steps.slice(0, player.at + 1).map(partyOf));
+  const on = s ? partyOf(s) : '';
+  const refused = s ? isRefusal(s) : false;
+  for (const g of map.querySelectorAll('.node[data-key]')) {
+    const k = g.dataset.key;
+    if (k === 'concierge') continue;
+    g.classList.toggle('used', used.has(k));
+    g.classList.toggle('on', k === on);
+    g.classList.toggle('refused', k === on && refused);
+  }
+  for (const n of NODES) {
+    const e = document.getElementById('e-' + n.key);
+    if (!e) continue;
+    e.classList.toggle('used', used.has(n.key));
+    e.classList.toggle('on', n.key === on);
+  }
+  sendPacket(on, refused);
+}
+
+/* A dot travels out with the request and back with the answer: hollow when the
+   answer was a refusal. Skipped for readers who asked for less motion. */
+function sendPacket(key, refused) {
+  const box = document.getElementById('st-packets');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!key || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const path = document.getElementById('e-' + key);
+  if (!path) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const dot = document.createElementNS(ns, 'circle');
+  dot.setAttribute('r', '6');
+  dot.setAttribute('class', 'packet');
+  const motion = document.createElementNS(ns, 'animateMotion');
+  motion.setAttribute('dur', '1.8s');
+  motion.setAttribute('keyPoints', '0;1;0');
+  motion.setAttribute('keyTimes', '0;0.5;1');
+  motion.setAttribute('calcMode', 'linear');
+  motion.setAttribute('fill', 'freeze');
+  motion.setAttribute('begin', 'indefinite');
+  motion.setAttribute('path', path.getAttribute('d'));
+  dot.appendChild(motion);
+  box.appendChild(dot);
+  if (refused) setTimeout(() => dot.setAttribute('class', 'packet back'), 900);
+  try { motion.beginElement(); } catch (_) { /* SMIL unsupported: the map still marks the hop */ }
+}
+
+const short = (v, n = 96) => { const t = String(v ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+const clock = t => String(t || '').slice(11, 16);
+
+/* What was asked and what came back, in a few rows rather than a JSON dump. */
+function exchange(s) {
+  const mp = payloadOf(s), q = mp.request || {}, a = mp.answer || {};
+  const env = a.envelope || {};
+  const reply = () => env.ok === undefined ? [] : [['Reply', env.ok ? 'accepted' : 'refused — ' + (env.detail || '')]];
+  const asked = [], got = [];
+  switch (s.step) {
+    case 'discover.organisation':
+      asked.push(['Search for', `“${q.query}”`]);
+      for (const m of (a.matches || []).slice(0, 1)) { got.push(['Identifier', m.urn || '—'], ['Catalog at', m.url]); }
+      if (a.matches && !a.matches.length) got.push(['Matches', 'none']);
+      break;
+    case 'discover.catalog':
+      asked.push(['Read', a.url || `${q.org}/.well-known/ai-catalog.json`]);
+      if (a.entries) got.push(['Listings', a.entries.map(e => e.identifier).join(', ')]);
+      break;
+    case 'discover.agent':
+      if (q.capability) asked.push(['Agent tagged', q.capability]);
+      if (q.urn) asked.push(['Look up name', q.urn]);
+      if (a.identifier) got.push(['Agent', a.identifier]);
+      if (a.card_name) got.push(['Agent card', a.card_name]);
+      if (a.endpoint) got.push(['Answers at', a.endpoint]);
+      break;
+    case 'ask.intent': case 'ask.note':
+      asked.push(['Tool', q.tool], ['To', (q.peer || {}).url]);
+      got.push(...reply());
+      break;
+    case 'venue.availability':
+      asked.push(['Table', q.resource], ['Sittings', (q.start || []).map(clock).join(', ')]);
+      got.push(['Free', (a.open || []).map(clock).join(', ') || 'none'], ...reply());
+      break;
+    case 'venue.hold.multiparty':
+      asked.push(['Table', `${q.resource} at ${clock(q.start)}`],
+                 ['Naming', (q.principals || []).map(p => p.startsWith('did:') ? 'the host' : p).join(', ')]);
+      got.push(...reply());
+      break;
+    case 'venue.consent.host': case 'venue.consent.as_guest':
+      asked.push(['Agree for', String(q.principal || '').startsWith('did:') ? 'the host' : q.principal],
+                 ['Presented', q.presented || 'nothing']);
+      got.push(...reply());
+      break;
+    default:
+      if (q.hold_id !== undefined) asked.push(['Hold', q.hold_id || '(none)']);
+      got.push(...reply());
+  }
+  if (a.error) got.push(['Error', a.error]);
+  return { asked: asked.filter(r => r[1]), got: got.filter(r => r[1]) };
+}
+
+/* The one thing to take away from a step, where the caption alone leaves it implicit. */
+const TAKEAWAY = {
+  'discover.organisation': 'The index does not host agents. It answers with a stable identifier for the company and where its catalog lives — the first hop.',
+  'discover.catalog': 'The company, not the index, lists its own agents. This is the second hop.',
+  'discover.agent': 'The agent card gives the address the agent actually answers on. That is the last hop: from here on the concierge talks to the agent directly.',
+  'ask.intent': 'This is agent-to-agent: the concierge is talking to an agent another company runs.',
+  'venue.hold.multiparty': 'A hold is not a booking. It becomes one only when everyone named agrees.',
+  'venue.consent.as_guest': 'This refusal is the point of the demo: an agent may act only for someone who signed it a grant.',
+};
+
+/* A refusal names its rule; say which rule, in words, for the ones a reader hits. */
+function whyRefused(s) {
+  const t = (s.outcome || '').toLowerCase();
+  if (t.includes('no index record')) return 'The restaurant only deals with agents it can look up in the '
+    + 'second index. This copy of the concierge has never been registered there \u2014 a localhost address '
+    + 'is never registered \u2014 so its signature checks out but nobody vouches for the key.';
+  if (s.step === 'venue.consent.as_guest') return 'The guest never signed this agent a grant, so it cannot '
+    + 'agree on their behalf.';
+  return '';
+}
+
+function renderCard() {
+  const card = $('st-card');
+  const s = player.steps[player.at];
+  if (!s) {
+    card.innerHTML = `<p class="c-meta">Before you start</p>
+      <h4>Watch the concierge work, one step at a time</h4>
+      <p class="c-plain">Press &ldquo;Run this request&rdquo;. Each step shows who the concierge is
+        talking to on the map, what it asked, and what came back. It plays by itself; pause to
+        read, or step through with Back and Next (or the arrow keys).</p>`;
+    return;
+  }
+  const phase = PHASES.find(p => p.id === s.phase);
+  const { asked, got } = exchange(s);
+  const refused = isRefusal(s);
+  const subject = (payloadOf(s).request || {}).subject || '';
+  const rows = (title, list) => list.length
+    ? `<span class="sec">${title}</span>${list.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd title="${esc(v)}">${esc(short(v))}</dd>`).join('')}` : '';
+  const live = player.at === player.steps.length - 1 && !player.finished;
+  card.innerHTML = `
+    <p class="c-meta">${phase ? `Phase ${phase.number} · ${esc(phase.title)} · ` : ''}step ${player.at + 1} of ${player.finished ? player.steps.length : player.steps.length + '+'}</p>
+    <h4>${esc(s.heading)}</h4>
+    <p class="c-route"><b>Concierge</b> &rarr; <b>${esc(nodeLabel(partyOf(s)))}</b>${subject ? ` &nbsp;·&nbsp; about ${esc(subject)}` : ''}</p>
+    <p class="c-plain">${esc(s.plain)}</p>
+    <dl class="c-io">${rows('Asked', asked)}${rows('Got back', got)}</dl>
+    ${refused ? '<span class="c-verdict">Refused</span>' : ''}
+    <p class="c-out${refused ? ' refused' : ''}">${esc(s.outcome)}</p>
+    ${refused && whyRefused(s) ? `<p class="c-why"><b>Why:</b> ${esc(whyRefused(s))}</p>` : ''}
+    ${TAKEAWAY[s.step] ? `<p class="c-why">${esc(TAKEAWAY[s.step])}</p>` : ''}
+    ${live ? '<p class="c-wait">Waiting for the next step…</p>' : ''}`;
+}
+
+function renderTrack() {
+  let html = '', lastPhase = null;
+  player.steps.forEach((s, i) => {
+    if (lastPhase !== null && s.phase !== lastPhase) html += '<li class="gap" aria-hidden="true"></li>';
+    lastPhase = s.phase;
+    const cls = [i <= player.at ? 'seen' : '', i === player.at ? 'on' : '', isRefusal(s) ? 'refused' : ''].join(' ');
+    html += `<li><button type="button" class="${cls}" data-i="${i}"
+      aria-label="Step ${i + 1}: ${esc(s.heading)}"${i === player.at ? ' aria-current="step"' : ''}>${i + 1}</button></li>`;
+  });
+  $('st-track').innerHTML = html;
+}
+
+function syncList() {
+  for (const li of document.querySelectorAll('#phases li.step')) {
+    const i = +li.dataset.i;
+    li.classList.toggle('ahead', i > player.at);
+    li.classList.toggle('now', i === player.at);
+  }
+}
+
+function syncControls() {
+  const n = player.steps.length;
+  $('st-prev').disabled = player.at <= 0;
+  $('st-next').disabled = player.at >= n - 1;
+  $('st-play').disabled = n === 0;
+  $('st-play').textContent = player.playing ? 'Pause' : (player.at >= n - 1 && player.finished ? 'Replay' : 'Play');
+}
+
+function show(i) {
+  player.at = Math.max(-1, Math.min(i, player.steps.length - 1));
+  const s = player.steps[player.at];
+  renderCard(); renderTrack(); syncList(); mark(s); syncControls();
+}
+
+/* Advance one step per DWELL_MS while playing; wait when caught up with the run. */
+function schedule() {
+  clearTimeout(player.timer);
+  player.timer = null;
+  if (!player.playing) return;
+  if (player.at >= player.steps.length - 1) {
+    if (player.finished) { player.playing = false; syncControls(); }
+    return;
+  }
+  const delay = player.at < 0 ? 0 : DWELL_MS;
+  player.timer = setTimeout(() => { show(player.at + 1); schedule(); }, delay);
+}
+
+function playerArrive(s) {
+  player.steps.push(s);
+  renderTrack(); syncControls();
+  if (player.at === player.steps.length - 2) renderCard(); // drop the "waiting" line
+  if (player.playing && !player.timer) schedule();
+}
+
+function playerFinish() {
+  player.finished = true;
+  renderCard(); syncControls();
+  if (player.playing && !player.timer) schedule();
+}
+
+function playerReset() {
+  clearTimeout(player.timer);
+  Object.assign(player, { steps: [], at: -1, playing: true, timer: null, finished: false });
+  show(-1);
+}
+
+function pauseAt(i) { player.playing = false; clearTimeout(player.timer); player.timer = null; show(i); }
+
+$('st-prev').addEventListener('click', () => pauseAt(player.at - 1));
+$('st-next').addEventListener('click', () => pauseAt(player.at + 1));
+$('st-play').addEventListener('click', () => {
+  if (player.playing) { pauseAt(player.at); return; }
+  if (player.finished && player.at >= player.steps.length - 1) show(-1);
+  player.playing = true; syncControls(); schedule();
+});
+$('st-track').addEventListener('click', e => {
+  const b = e.target.closest('button[data-i]');
+  if (b) pauseAt(+b.dataset.i);
+});
+$('phases').addEventListener('click', e => {
+  const li = e.target.closest('li.step');
+  if (li && li.dataset.i !== undefined) {
+    pauseAt(+li.dataset.i);
+    document.querySelector('.stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+document.addEventListener('keydown', e => {
+  if (!$('p-plain').classList.contains('on') || !player.steps.length) return;
+  if (e.target.closest('input, textarea, [role="tablist"]')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); pauseAt(player.at + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); pauseAt(player.at - 1); }
+});
+
+/* The phases are laid out before the run starts, so a reader knows the shape of
+   what is about to happen and what each phase is meant to demonstrate. */
+function layOutPhases() {
+  phasesBox.innerHTML = PHASES.map(p => `
+    <section class="phase idle" id="ph-${esc(p.id)}">
+      <div class="phase-head">
+        <span class="phase-num">Phase ${p.number}</span>
+        <h3>${esc(p.title)}</h3>
+        <p class="what">${esc(p.summary)}</p>
+      </div>
+      <ol class="steps" id="steps-${esc(p.id)}"></ol>
+      <div class="valid"><span class="lbl">What this proves</span>
+        <p>${esc(p.validation)}</p></div>
+    </section>`).join('');
+}
+
+/* A refusal is a result, not a failure. Marked by weight, never by colour. */
+const isRefusal = s => /refused|withheld|could not/i.test(s.outcome || '');
+
+function addStep(s) {
+  const list = $('steps-' + s.phase) || $('steps-' + (PHASES[0] || {}).id);
+  if (!list) return;
+  list.closest('.phase').classList.remove('idle');
+  const li = document.createElement('li');
+  li.className = 'step' + (isRefusal(s) ? ' refused' : '');
+  /* Its index in the player, so clicking the entry shows it there. Rendered
+     "ahead" until the player reaches it: present, but visibly not yet. */
+  li.dataset.i = String(document.querySelectorAll('#phases li.step').length);
+  if (+li.dataset.i > player.at) li.classList.add('ahead');
+  const nc = (s.not_claimed || []).length
+    ? `<ul class="nc"><span class="lbl">This step does not prove</span>${
+        s.not_claimed.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`
+    : '';
+  /* An ARP receipt keeps the step's own request under action.machine_payload;
+     the old flat path silently produced '' for every step. */
+  const mp = (s.entry && s.entry.action && s.entry.action.machine_payload) || {};
+  const subject = (mp.request && mp.request.subject) || '';
+  li.innerHTML = `<span class="n">${s.seq}</span>
+    ${subject ? `<p class="subj">${esc(subject)}</p>` : ''}
+    <h4>${esc(s.heading)}</h4>
+    <p class="plain">${esc(s.plain)}</p>
+    <p class="outcome">${esc(s.outcome)}</p>${nc}`;
+  list.appendChild(li);
+}
+
+function addRaw(s) {
+  if (raw.querySelector('.empty')) raw.innerHTML = '';
+  const d = document.createElement('details');
+  d.className = 'blk';
+  d.innerHTML = `<summary>
+      <span class="lead"><i class="caret" aria-hidden="true"></i>${s.seq} &nbsp;${esc(s.step)}</span>
+      <span class="id">${esc((s.digest || '').slice(0, 23))}</span></summary>
+    <pre>${esc(JSON.stringify(s.entry, null, 2))}</pre>`;
+  // One entry open at a time. Thirteen expanded JSON blocks is a wall, and the
+  // point of opening one is to read it against the step it belongs to.
+  d.addEventListener('toggle', () => {
+    if (!d.open) return;
+    for (const other of raw.querySelectorAll('details.blk')) {
+      if (other !== d) other.open = false;
+    }
+  });
+  raw.appendChild(d);
+}
+
+/* What a third party can check afterwards, and what they cannot. */
+function showReceipts(steps) {
+  const box = document.getElementById('receipts');
+  if (!steps.length) { box.innerHTML = ''; return; }
+  const last = steps[steps.length - 1] || {};
+  const rstep = steps.find(s => s.step === 'venue.receipt');
+  /* The venue's own ARP receipt, as this agent recorded receiving it. It rides
+     inside the machine_payload of our receipt for that step. */
+  const rp = rstep && rstep.entry && rstep.entry.action && rstep.entry.action.machine_payload;
+  const venue = rp && rp.answer && rp.answer.receipt;
+
+  const venueBlock = venue
+    ? `<p class="m">${esc(venue.receipt_id)}</p>
+       <p>${esc((venue.action || {}).human_summary || '')}</p>
+       <p class="m">issuer ${esc(venue.issuer_did || '')}</p>`
+    : `<p class="none">None yet. The restaurant signs one when every named person has
+         agreed \u2014 so a table that is only held has nothing to show here, and that is
+         the honest answer rather than a missing one.</p>`;
+
+  box.innerHTML = `<div class="rcpt">
+    <h3>What can be checked afterwards</h3>
+
+    <p class="who">This agent&rsquo;s record of the whole run</p>
+    <p>${steps.length} entries, each signed and committing to the digest of the one before it, so a
+       step removed later is visible even though nothing of it remains.</p>
+    <p class="m">latest digest ${esc((last.digest || '').slice(0, 32))}&hellip;</p>
+
+    <p class="who">The restaurant&rsquo;s own receipt for the booking</p>
+    ${venueBlock}
+    <p>Signed by the restaurant, not by us, and read back from its public log &mdash; the same way
+       an outsider auditing this booking would.</p>
+
+    <p class="who">The authority the concierge acted under</p>
+    <div id="authority"><p class="none">Checking&hellip;</p></div>
+
+  </div>`;
+  showAuthority();
+}
+
+/* Receipts say what happened. They do not say the agent was allowed to do it.
+   That is a separate signed statement by the host, and it is the half an agent
+   cannot write for itself. */
+async function showAuthority() {
+  const box = document.getElementById('authority');
+  if (!box) return;
+  try {
+    const d = await fetch(BASE + 'authority').then(r => r.json());
+    if (d.error) { box.innerHTML = `<p class="none">${esc(d.detail || d.error)}</p>`; return; }
+    const a = d.summary;
+    box.innerHTML = `
+      <p>${esc(a.human_summary || '')}</p>
+      <p class="m">granted by ${esc(a.host)}</p>
+      <p class="m">to ${esc(a.agent)}</p>
+      <p class="m">until ${esc((a.not_after || '').replace('T', ' ').replace('Z', ' UTC'))}</p>
+      <p>Limited to ${a.categories.length} kinds of action and
+         ${a.counterparties.length} named counterparties. A step outside either is refused when
+         the grant is checked, not merely noted.</p>
+      ${a.revocable ? '' : `<p class="none">This grant names no revocation list, so nothing here
+         can be withdrawn before it expires. The only place this demo could publish one from is
+         this agent &mdash; and an agent that publishes its own revocations can decline to
+         revoke itself.</p>`}`;
+  } catch (err) {
+    box.innerHTML = `<p class="none">Could not read the grant: ${esc(err.message)}</p>`;
+  }
+}
+
+/* The rows describe the state the run actually reached. They used to be written
+   for a flow that always booked, so a held table — the honest outcome when the
+   guests have not answered — reported "nothing booked" directly above a note
+   saying the table was held. The headline contradicted the finding. */
+function showSummary(sum) {
+  if (!sum) return;
+  const when = sum.start || sum.booked_start;
+  const held = sum.state === 'held';
+  const done = sum.state === 'confirmed';
+  const rows = [
+    ['Date', sum.date],
+    [done ? 'Booked' : held ? 'Table held' : 'Table',
+     when ? `${when}${sum.covers ? ` \u2014 for ${sum.covers}` : ''}` : 'nothing held'],
+    ['Table', sum.resource],
+    [done ? 'Booking reference' : 'Hold reference', sum.hold_id || '\u2014'],
+    ['Still to agree',
+     done ? 'everyone has' : (sum.pending || []).length ? sum.pending.join(', ') : '\u2014'],
+    ['Recorded', `${sum.steps} steps, each signed and linked to the one before`],
+  ];
+  summaryBox.innerHTML = `<div class="summary"><h3>What happened</h3><dl>${
+    rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`).join('')}</dl>${
+    (sum.notes||[]).map(n => `<p class="note">${esc(n)}</p>`).join('')}</div>`;
+}
+
+function busy(on) {
+  $('run').disabled = on;
+  $('replay').disabled = on;
+  $('run').textContent = on ? 'Running\u2026' : 'Run this request';
+}
+
+/* Bumped by every reset, so a replay still loading when Run is pressed cannot
+   paint the old run into the middle of the new one. */
+let generation = 0;
+
+function reset() {
+  generation++;
+  layOutPhases();
+  raw.innerHTML = '<p class="empty">No run yet.</p>';
+  summaryBox.innerHTML = '';
+  document.getElementById('receipts').innerHTML = '';
+  playerReset();
+}
+
+$('run').addEventListener('click', () => {
+  reset(); busy(true);
+  setStatus('Connecting\u2026');
+  let n = 0;
+  const seen = [];
+  source = new EventSource(BASE + 'stream');
+
+  source.addEventListener('start', () => setStatus('Running. Steps appear as each one completes.'));
+  source.addEventListener('step', e => {
+    const s = JSON.parse(e.data);
+    n++; seen.push(s); addStep(s); addRaw(s); playerArrive(s);
+    setStatus(`Step ${n} complete \u2014 ${s.heading.toLowerCase()}.`);
+  });
+  source.addEventListener('done', e => {
+    showSummary(JSON.parse(e.data));
+    showReceipts(seen);
+    playerFinish();
+    setStatus(`Finished. ${n} steps recorded and signed.`);
+    source.close(); busy(false);
+  });
+  source.addEventListener('error', e => {
+    let msg = 'The connection to the agent dropped.';
+    try { msg = JSON.parse(e.data).message; } catch (_) {}
+    let limited = false;
+    try { limited = !!JSON.parse(e.data).limited; } catch (_) {}
+    setStatus(msg);
+    if (source) source.close();
+    playerFinish();
+    busy(false);
+    // Turned away is not a dead end: the last run shows what a live one does.
+    if (limited) loadLast({ note: msg });
+  });
+});
+
+/* The last run, played through the step-by-step player. Nothing is contacted:
+   these are the receipts the agent kept. On page load this is what a visitor
+   sees first, so the demo explains itself before anyone spends a live run. */
+async function loadLast({ onLoad = false, note = '' } = {}) {
+  if (!onLoad) { reset(); busy(true); setStatus('Loading the last run\u2026'); }
+  const mine = generation;
+  try {
+    const d = await fetch(BASE + 'last').then(r => r.json());
+    if (mine !== generation) return;          // a run started meanwhile
+    if (!d.steps || !d.steps.length) {
+      if (!onLoad) setStatus(note || d.note || 'No run recorded yet.');
+      return;
+    }
+    for (const s of d.steps) { addStep(s); addRaw(s); playerArrive(s); }
+    playerFinish();
+    showSummary(d.summary);
+    showReceipts(d.steps);
+    const at = ((d.steps[0].entry || {}).issued_at || '').replace('T', ' ').replace('Z', ' UTC');
+    setStatus((note ? note + ' ' : '')
+      + `Replaying the last run${at ? `, recorded ${at}` : ''} \u2014 ${d.steps.length} steps. `
+      + 'Nothing is contacted to show it; press \u201CRun this request\u201D to run it live.');
+  } catch (err) {
+    if (!onLoad) setStatus('Could not load the last run: ' + err.message);
+  } finally {
+    if (!onLoad) busy(false);
+  }
+}
+
+$('replay').addEventListener('click', () => loadLast());
+
+/* Everything the page says about the run comes from the server, so it cannot
+   describe a run different from the one it triggers. */
+fetch(BASE + 'config').then(r => r.json()).then(d => {
+  PHASES = d.phases || [];
+  $('request').textContent = '\u201C' + d.request + '\u201D';
+  $('ident').textContent = 'agent ' + d.agent.did + '  \u00B7  ' + d.agent.urn;
+  $('parties').innerHTML = [
+    `<li><span class="role">Doing the work</span><span class="body">
+       <strong>The concierge</strong>
+       <p class="m">${esc(d.agent.urn)}</p></span></li>`,
+    ...d.guests.map(g => `<li><span class="role">Guest</span><span class="body">
+       <strong>${esc(g.who)}</strong>
+       <p>${esc(g.company)} runs its own agents. This one is found by
+          ${esc(g.found_by)}.</p>
+       <p class="m">${esc(g.agent)}</p></span></li>`),
+    `<li><span class="role">Restaurant</span><span class="body">
+       <strong>An independent venue</strong>
+       <p class="m">${esc(d.venue.replace(/^https?:\/\//, ''))}</p></span></li>`,
+    `<li><span class="role">Directories</span><span class="body">
+       <strong>Two public indexes</strong>
+       <p class="m">${esc(d.index.replace(/^https?:\/\//, ''))}</p></span></li>`,
+  ].join('');
+  layOutPhases();
+  buildNodes(d); drawMap(); show(-1);
+  const limit = (d.run_limit || {}).per_hour;
+  if (limit) {
+    $('run-note').insertAdjacentText('beforeend',
+      ` Live runs are limited to ${limit} per visitor per hour; the last run replays for free.`);
+  }
+  loadLast({ onLoad: true });
+}).catch(() => {
+  $('request').textContent = 'Could not reach the agent to load the request.';
+});
+</script>
+</html>

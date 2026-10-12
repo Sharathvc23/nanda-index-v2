@@ -238,36 +238,6 @@ export async function verifyDomain(orgId: string): Promise<IndexRecord> {
   });
 }
 
-export interface CreateAgentPayload {
-  agent_id: string;
-  display_name: string;
-  url: string;
-  media_type?: string;
-  description?: string;
-  tags?: string[];
-  version?: string;
-  ttl_seconds?: number;
-}
-
-/** POST /agents on a Registry Server — requires admin token. */
-export async function createRegistryAgent(
-  registryUrl: string,
-  adminToken: string,
-  payload: CreateAgentPayload,
-): Promise<CatalogEntry> {
-  const base = registryUrl.replace(/\/+$/, "");
-  const res = await fetch(`${base}/agents`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${adminToken}`,
-    },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-  return parseApiResponse<CatalogEntry>(res);
-}
-
 /** GET /agents on a Registry Server — returns full CatalogDocument. */
 export async function listRegistryAgents(
   registryUrl: string,

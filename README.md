@@ -10,6 +10,11 @@ Requester → NANDA Index → Registry / Agent Card Host → Agent Runtime
 
 NANDA Index does not host agents. It tells you where to find them.
 
+A worked example of the whole chain lives in [`demo/`](demo/): an agent that
+searches the index for two organisations, follows each to the agent it needs by a
+different route, books a restaurant, and leaves a signed record. MIT-licensed,
+separate from this repository's Apache-2.0 license.
+
 ---
 
 ## Architecture
@@ -127,7 +132,44 @@ NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 
 DB_MAX_CONNECTIONS=10
+
+# Concierge demo at https://nandaindex.org/demo — all optional, defaults shown
+DEMO_BASE_URL=https://nandaindex.org/demo
+DEMO_RUN_LIMIT_PER_HOUR=3          # live runs per visitor per hour; 0 = unlimited
+DEMO_PUBLIC_INDEX_URL=https://api.nandaindex.org
 ```
+
+### Concierge demo (`/demo`)
+
+`docker compose up` also starts the concierge demo (`demo/`), served by Caddy at
+`https://nandaindex.org/demo`. It is an agent, not just a page: its signing key,
+its grant and its last run live on the `demo_data` volume. **Never delete that
+volume** — the agent's name is derived from the key, so a new volume is a
+different agent with no grant and no registration.
+
+The first deploy needs two one-time steps, because a grant names a key that has
+to exist first:
+
+```bash
+# 1. Read the DID the agent generated for itself
+curl -s https://nandaindex.org/demo/healthz          # → "did": "did:key:z6Mk…"
+
+# 2. Mint the host's grant for that DID, onto the volume the agent reads.
+#    HOST_SEED is the host's key material: keep it private and keep it, or no
+#    replacement or revocation can ever be minted for this host identity.
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec \
+  -e AGENT_DID='did:key:z6Mk…' -e HOST_SEED='…' demo python tools/mint_grant.py
+
+# 3. Restart so it loads the grant; it registers itself with the second index
+#    on start and renews every hour after that.
+docker compose -f docker-compose.prod.yml --env-file .env.prod restart demo
+curl -s https://nandaindex.org/demo/ui/authority     # names the same DID
+```
+
+The grant expires after 90 days — repeat step 2 with the same `HOST_SEED`.
+Visitors see the last run replayed in the step-by-step player on load; each
+visitor may start `DEMO_RUN_LIMIT_PER_HOUR` live runs, because a live run sends
+real messages to two companies' agents and holds a real table.
 
 ---
 

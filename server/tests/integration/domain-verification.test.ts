@@ -4,7 +4,15 @@ import type { FastifyInstance } from 'fastify';
 // Mock Node DNS so the verifier's resolver is deterministic in tests.
 // vi.hoisted lets the (hoisted) vi.mock factory reference the spy safely.
 const { resolveTxtMock } = vi.hoisted(() => ({ resolveTxtMock: vi.fn() }));
-vi.mock('node:dns/promises', () => ({ resolveTxt: resolveTxtMock }));
+// Every resolver verification asks — the host's and each public one — answers
+// with the same spy, so a test states one DNS truth and all resolvers see it.
+vi.mock('node:dns/promises', () => ({
+  resolveTxt: resolveTxtMock,
+  Resolver: class {
+    setServers(): void {}
+    resolveTxt(name: string) { return resolveTxtMock(name); }
+  },
+}));
 
 import { buildServer } from '../../src/server.js';
 import { getSql } from '../../src/db/client.js';
@@ -113,7 +121,7 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     const chal = (await requestChallenge(fastify, adminToken, 'dv-ok')).json();
 
     // DNS now returns the exact challenge value.
-    resolveTxtMock.mockResolvedValueOnce([[chal.record_value]]);
+    resolveTxtMock.mockResolvedValue([[chal.record_value]]);
 
     const res = await verifyDomain(fastify, adminToken, 'dv-ok');
     expect(res.statusCode).toBe(200);
@@ -128,7 +136,7 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     await requestChallenge(fastify, adminToken, 'dv-missing');
 
     // Domain has no challenge record yet.
-    resolveTxtMock.mockRejectedValueOnce(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }));
+    resolveTxtMock.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }));
 
     const res = await verifyDomain(fastify, adminToken, 'dv-missing');
     expect(res.statusCode).toBe(400);
@@ -146,7 +154,7 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     await createOrg(fastify, adminToken, 'dv-wrong');
     await requestChallenge(fastify, adminToken, 'dv-wrong');
 
-    resolveTxtMock.mockResolvedValueOnce([['nanda-verify=some-other-token'], ['v=spf1 ~all']]);
+    resolveTxtMock.mockResolvedValue([['nanda-verify=some-other-token'], ['v=spf1 ~all']]);
 
     const res = await verifyDomain(fastify, adminToken, 'dv-wrong');
     expect(res.statusCode).toBe(400);
@@ -183,7 +191,7 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
   it('resets domain_verified and reverts to pending when the domain is changed', async () => {
     await createOrg(fastify, adminToken, 'dv-rotate');
     const chal = (await requestChallenge(fastify, adminToken, 'dv-rotate')).json();
-    resolveTxtMock.mockResolvedValueOnce([[chal.record_value]]);
+    resolveTxtMock.mockResolvedValue([[chal.record_value]]);
 
     const verified = (await verifyDomain(fastify, adminToken, 'dv-rotate')).json();
     expect(verified.domain_verified).toBe(true);
@@ -205,7 +213,7 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
   it('keeps domain_verified when an unrelated field is updated', async () => {
     await createOrg(fastify, adminToken, 'dv-keep');
     const chal = (await requestChallenge(fastify, adminToken, 'dv-keep')).json();
-    resolveTxtMock.mockResolvedValueOnce([[chal.record_value]]);
+    resolveTxtMock.mockResolvedValue([[chal.record_value]]);
     await verifyDomain(fastify, adminToken, 'dv-keep');
 
     const res = await fastify.inject({

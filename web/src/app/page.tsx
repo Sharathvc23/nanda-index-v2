@@ -35,7 +35,7 @@ export default function HomePage() {
           Catalog internally. NandaIndex complements discovery protocols such as
           ARD and federated infrastructure such as the AGNTCY Agent Directory. It
           builds on the switchboard proposed by NANDA and AGNTCY, developed
-          jointly by Outshift (Cisco) and MIT Media Lab, and extends that model
+          jointly by Outshift (Cisco), MIT Media Lab and Nasiko, and extends that model
           with improvements to AI Catalog.
         </p>
 

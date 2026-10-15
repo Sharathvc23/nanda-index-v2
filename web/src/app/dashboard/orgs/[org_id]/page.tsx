@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
 import { DomainVerification } from "@/components/DomainVerification";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import type { IndexRecord } from "@/lib/nanda-types";
 
 export default function OrgDetailPage() {
@@ -15,6 +17,7 @@ export default function OrgDetailPage() {
   const router = useRouter();
   const params = useParams<{ org_id: string }>();
   const orgId = params.org_id;
+  const fid = useId();
 
   const [org, setOrg] = useState<IndexRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,7 +128,6 @@ export default function OrgDetailPage() {
   }
 
   const inputCls = "w-full rounded-2xl border border-black/10 px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300";
-  const labelCls = "mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500";
 
   if (loading) {
     return <PageShell title={orgId} description="Loading…"><div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm text-sm text-slate-400">Loading…</div></PageShell>;
@@ -172,32 +174,32 @@ export default function OrgDetailPage() {
 
         {editing ? (
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
-            <label className="block">
-              <span className={labelCls}>Display Name</span>
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Domain</span>
-              <input value={domain} onChange={(e) => setDomain(e.target.value)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Catalog / Agent Card URL</span>
-              <input value={registryUrl} onChange={(e) => setRegistryUrl(e.target.value)} className={inputCls} placeholder="https://catalog.example.com" />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Description (optional)</span>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Describe your registry or agent catalog." />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Tags (optional, comma-separated)</span>
-              <input value={tags} onChange={(e) => setTags(e.target.value)} className={inputCls} placeholder="enterprise, payments, ai-catalog" />
+            <div>
+              <FieldLabel htmlFor={`${fid}-display-name`} label="Display Name" info={ORG_FIELD_HELP.display_name} />
+              <input id={`${fid}-display-name`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <FieldLabel htmlFor={`${fid}-domain`} label="Domain" info={ORG_FIELD_HELP.domain} />
+              <input id={`${fid}-domain`} value={domain} onChange={(e) => setDomain(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <FieldLabel htmlFor={`${fid}-url`} label="Catalog / Agent Card URL" info={ORG_FIELD_HELP.registry_url} />
+              <input id={`${fid}-url`} value={registryUrl} onChange={(e) => setRegistryUrl(e.target.value)} className={inputCls} placeholder="https://catalog.example.com" />
+            </div>
+            <div>
+              <FieldLabel htmlFor={`${fid}-description`} label="Description" info={ORG_FIELD_HELP.description} optional />
+              <textarea id={`${fid}-description`} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={`${inputCls} resize-none`} placeholder="Describe your registry or agent catalog." />
+            </div>
+            <div>
+              <FieldLabel htmlFor={`${fid}-tags`} label="Tags" info={ORG_FIELD_HELP.tags} optional />
+              <input id={`${fid}-tags`} value={tags} onChange={(e) => setTags(e.target.value)} className={inputCls} placeholder="enterprise, payments, ai-catalog" />
               <p className="mt-1 text-[11px] text-slate-400">Separate tags with commas.</p>
-            </label>
-            <label className="block">
-              <span className={labelCls}>Version (optional)</span>
-              <input value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
+            </div>
+            <div>
+              <FieldLabel htmlFor={`${fid}-version`} label="Version" info={ORG_FIELD_HELP.version} optional />
+              <input id={`${fid}-version`} value={version} onChange={(e) => setVersion(e.target.value)} className={inputCls} placeholder="v1.0.0" />
               <p className="mt-1 text-[11px] text-slate-400">SemVer of this artifact (shown on the card).</p>
-            </label>
+            </div>
             <div className="flex gap-3">
               <button onClick={onSave} disabled={saving} className="rounded-2xl bg-slate-950 px-6 py-2.5 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving…" : "Save"}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
+import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import { ApiError, createOrg } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -140,33 +142,31 @@ function validateStep3(form: FormState): Record<string, string> {
 
 function Field({
   label, value, onChange, onBlur, placeholder, type = "text",
-  hint, error, textarea, optional,
+  hint, info, error, textarea, optional,
 }: {
   label: string; value: string; onChange: (v: string) => void;
   onBlur?: () => void; placeholder?: string; type?: string;
-  hint?: string; error?: string; textarea?: boolean; optional?: boolean;
+  hint?: string; info?: string; error?: string; textarea?: boolean; optional?: boolean;
 }) {
+  const id = useId();
   const cls = cn(
     "w-full rounded-2xl border px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300 bg-white transition",
     error ? "border-rose-300 bg-rose-50/40" : "border-black/10",
   );
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
-        {label}
-        {optional && <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">(optional)</span>}
-      </span>
+    <div>
+      <FieldLabel htmlFor={id} label={label} info={info} optional={optional} />
       {textarea ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
           placeholder={placeholder} rows={3} className={cn(cls, "resize-none")} />
       ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur} placeholder={placeholder} className={cls} />
       )}
       {error ? <p className="mt-1 text-[11px] text-rose-500">{error}</p>
         : hint ? <p className="mt-1 text-[11px] text-slate-400">{hint}</p>
           : null}
-    </label>
+    </div>
   );
 }
 
@@ -452,18 +452,18 @@ export default function NewOrgPage() {
             <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}
               onBlur={() => touch("org_id")} placeholder="moon-bakery"
               hint="Lowercase letters, numbers, hyphens. Permanent — cannot be changed later."
-              error={visible("org_id")} />
+              info={ORG_FIELD_HELP.org_id} error={visible("org_id")} />
 
             <Field label="Display Name" value={form.display_name} onChange={(v) => patch("display_name", v)}
               onBlur={() => touch("display_name")} placeholder={isPersonal ? "John" : "Moon Bakery"}
-              error={visible("display_name")} />
+              info={ORG_FIELD_HELP.display_name} error={visible("display_name")} />
 
             {/* Domain (all except personal) */}
             {!isPersonal && (
               <Field label="Domain" value={form.domain} onChange={(v) => patch("domain", v)}
                 onBlur={() => touch("domain")} placeholder="moonbakery.com"
                 hint="Agents will be addressable under this domain."
-                error={visible("domain")} />
+                info={ORG_FIELD_HELP.domain} error={visible("domain")} />
             )}
 
             {/* Email identity (personal only) */}
@@ -471,7 +471,7 @@ export default function NewOrgPage() {
               <Field label="Email Identity" value={form.identity_email} onChange={(v) => patch("identity_email", v)}
                 onBlur={() => touch("identity_email")} type="email" placeholder="john@hotmail.com"
                 hint={`We email a verification link here. Your identifier: urn:air:${PERSONAL_CARD_HOST}:personal:john@hotmail.com`}
-                error={visible("identity_email")} />
+                info={ORG_FIELD_HELP.identity_email} error={visible("identity_email")} />
             )}
 
             {/* Locator preview */}
@@ -523,7 +523,7 @@ export default function NewOrgPage() {
                 onChange={(v) => patch("registry_url", v)} onBlur={() => touch("registry_url")}
                 placeholder="https://example.com/.well-known/ai-catalog.json"
                 hint="Your AI Catalog endpoint (or the base URL of your nanda-registry server)."
-                error={visible("registry_url")} />
+                info={ORG_FIELD_HELP.catalog_url} error={visible("registry_url")} />
             )}
 
             {/* DNS SVCB path */}
@@ -539,7 +539,7 @@ export default function NewOrgPage() {
                   onChange={(v) => patch("registry_url", v)} onBlur={() => touch("registry_url")}
                   placeholder={`https://api.${form.domain || "skyblue.com"}/agents/refunds.json`}
                   hint="The URL of the A2A Agent Card your DNS records point to."
-                  error={visible("registry_url")} />
+                  info={ORG_FIELD_HELP.svcb_card_url} error={visible("registry_url")} />
               </>
             )}
 
@@ -548,7 +548,7 @@ export default function NewOrgPage() {
                 onChange={(v) => patch("agent_id", v)} onBlur={() => touch("agent_id")}
                 placeholder="orders"
                 hint={`Identifier short-name: urn:air:${form.domain || "<domain>"}:agent:<id>. Defaults to your Org ID.`}
-                error={visible("agent_id")} optional />
+                info={ORG_FIELD_HELP.agent_id} error={visible("agent_id")} optional />
             )}
 
             {/* SMB + Personal paths */}
@@ -571,17 +571,16 @@ export default function NewOrgPage() {
                       : "https://agentcards.host39.org/personal/john@hotmail.com/card.json"
                   }
                   hint="The URL of your A2A Agent Card."
-                  error={visible("registry_url")} />
+                  info={ORG_FIELD_HELP.agent_card_url} error={visible("registry_url")} />
 
                 {/* Runtime info */}
                 <div className="space-y-3 border-t border-black/5 pt-3">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Runtime & auth <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span></p>
 
                   <div>
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
-                      Runtime provider <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
-                    </span>
-                    <select value={form.runtime_provider} onChange={(e) => patch("runtime_provider", e.target.value)}
+                    <FieldLabel htmlFor="runtime-provider" label="Runtime provider"
+                      info={ORG_FIELD_HELP.runtime_provider} optional />
+                    <select id="runtime-provider" value={form.runtime_provider} onChange={(e) => patch("runtime_provider", e.target.value)}
                       className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
                       <option value="">— not specified —</option>
                       {RUNTIME_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -591,32 +590,35 @@ export default function NewOrgPage() {
                   <Field label="Runtime URL" value={form.runtime_url}
                     onChange={(v) => patch("runtime_url", v)}
                     placeholder="https://my-agent.aws.example.com"
-                    hint="The endpoint where your agent runtime is hosted." optional />
+                    hint="The endpoint where your agent runtime is hosted."
+                    info={ORG_FIELD_HELP.runtime_url} optional />
 
                   <Field label="Auth metadata" value={form.auth_metadata}
                     onChange={(v) => patch("auth_metadata", v)}
                     placeholder="public"
-                    hint='Describes what metadata is public. E.g. "public", "public_minimal".' optional />
+                    hint='Describes what metadata is public. E.g. "public", "public_minimal".'
+                    info={ORG_FIELD_HELP.auth_metadata} optional />
 
                   <Field label="Auth execution" value={form.auth_execution}
                     onChange={(v) => patch("auth_execution", v)}
                     placeholder="payment_or_session_token_required"
-                    hint='What callers need to invoke this agent. E.g. "user_consent_required".' optional />
+                    hint='What callers need to invoke this agent. E.g. "user_consent_required".'
+                    info={ORG_FIELD_HELP.auth_execution} optional />
                 </div>
               </>
             )}
 
             <Field label="Description" value={form.description} onChange={(v) => patch("description", v)}
               placeholder="Ordering agent for Moon Bakery. Supports menu lookup, order placement, and pickup scheduling."
-              textarea optional />
+              info={ORG_FIELD_HELP.description} textarea optional />
 
             <Field label="Tags" value={form.tags} onChange={(v) => patch("tags", v)}
               placeholder="smb, bakery, orders, a2a-agent-card"
-              hint="Comma-separated labels." optional />
+              hint="Comma-separated labels." info={ORG_FIELD_HELP.tags} optional />
 
             <Field label="Version" value={form.version} onChange={(v) => patch("version", v)}
               placeholder="v1.0.0"
-              hint="SemVer of this artifact (shown on the card)." optional />
+              hint="SemVer of this artifact (shown on the card)." info={ORG_FIELD_HELP.version} optional />
 
             {/* Advanced: identifier override */}
             <div className="border-t border-black/5 pt-3">
@@ -635,7 +637,7 @@ export default function NewOrgPage() {
                       onChange={(v) => patch("identifier", v)} onBlur={() => touch("identifier")}
                       placeholder={derivedIdentifier}
                       hint={`Override only if you need a custom path. Must stay under urn:air:${form.domain || "<domain>"}:`}
-                      error={visible("identifier")} optional />
+                      info={ORG_FIELD_HELP.identifier} error={visible("identifier")} optional />
                   )}
                 </div>
               )}
@@ -674,12 +676,12 @@ export default function NewOrgPage() {
                 onChange={(v) => patch("contact_email", v)} onBlur={() => touch("contact_email")}
                 placeholder="admin@moonbakery.com" type="email"
                 hint="A verification link will be sent here to activate your index record."
-                error={visible("contact_email")} />
+                info={ORG_FIELD_HELP.contact_email} error={visible("contact_email")} />
             )}
 
             <div>
-              <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Cache TTL</span>
-              <select value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
+              <FieldLabel htmlFor="cache-ttl" label="Cache TTL" info={ORG_FIELD_HELP.ttl_seconds} />
+              <select id="cache-ttl" value={form.ttl_seconds} onChange={(e) => patch("ttl_seconds", e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
                 {TTL_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>

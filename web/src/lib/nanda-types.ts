@@ -71,6 +71,8 @@ export interface IndexRecord {
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
+  /** Members' view only: the DNS challenge issued and not yet expired, if any. */
+  pending_domain_challenge?: DomainChallenge | null;
 }
 
 /** DNS TXT challenge issued to prove ownership of an org's domain. */

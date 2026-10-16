@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -35,6 +35,9 @@ const PUBLISHER_INPUT_SCHEMA = {
 } as const;
 
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Minimum gap between verification emails for one org (resend). */
+const RESEND_COOLDOWN_MS = 60 * 1000;
 
 /** PUT /api/v1/orgs/:org_id body — exactly the fields an admin may change. */
 const UPDATE_ORG_BODY_SCHEMA = {
@@ -99,6 +102,29 @@ const DOMAIN_CHALLENGE_SCHEMA = {
   },
 } as const;
 
+/** The members' view of an org: the public record plus the DNS challenge in progress, if any. */
+const OWNER_RECORD_SCHEMA = {
+  ...INDEX_RECORD_SCHEMA,
+  properties: {
+    ...INDEX_RECORD_SCHEMA.properties,
+    pending_domain_challenge: { ...DOMAIN_CHALLENGE_SCHEMA, type: ['object', 'null'] },
+  },
+} as const;
+
+/** The issued, unexpired DNS challenge for an org's domain, in the shape POST /domain-challenge returns. */
+function pendingDomainChallenge(org: Organization, now: Date = new Date()) {
+  if (!org.domain || !org.domainChallenge || !org.domainChallengeExpiresAt || org.domainChallengeExpiresAt <= now) {
+    return null;
+  }
+  return {
+    domain:       org.domain,
+    record_name:  challengeRecordName(org.domain),
+    record_type:  'TXT',
+    record_value: challengeRecordValue(org.domainChallenge),
+    expires_at:   org.domainChallengeExpiresAt.toISOString(),
+  };
+}
+
 interface CreateOrgBody {
   org_id: string;
   display_name: string;
@@ -148,6 +174,17 @@ const conflictError = (detail: string): ApiError => ({ status: 409, body: { erro
  */
 function withBlankDomainAsNull(body: CreateOrgBody): CreateOrgBody {
   return body.domain?.trim() ? body : { ...body, domain: null };
+}
+
+/**
+ * On update, a blank domain means "leave it unchanged": edit forms send '' for
+ * personal entries, which have no domain, and that must not read as an attempt
+ * to give them one.
+ */
+function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
+  if (body.domain === undefined || body.domain.trim()) return body;
+  const { domain: _blank, ...rest } = body;
+  return rest;
 }
 
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
@@ -389,7 +426,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         properties: { org_id: { type: 'string' } },
       },
       response: {
-        200: INDEX_RECORD_SCHEMA,
+        200: OWNER_RECORD_SCHEMA,
         403: apiErrorSchema,
         404: apiErrorSchema,
       },
@@ -400,7 +437,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
-    return reply.send(toIndexRecord(org));
+    // Members only (requireOrgRole): the challenge is how they prove the domain,
+    // and the dashboard must show the record already issued after a reload
+    // rather than force a new one that invalidates what is in their DNS.
+    return reply.send({ ...toIndexRecord(org), pending_domain_challenge: pendingDomainChallenge(org) });
   });
 
   // Issue (or rotate) a DNS TXT challenge for the org's domain
@@ -416,6 +456,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         200: DOMAIN_CHALLENGE_SCHEMA,
+        400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
       },
@@ -424,6 +465,9 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const org = await findByOrgId(request.params.org_id);
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+    if (!org.domain) {
+      return reply.code(400).send({ error: 'NO_DOMAIN', detail: 'this org has no domain to verify (personal email-identity org)' });
     }
 
     const token = randomBytes(32).toString('hex');
@@ -520,7 +564,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const body = request.body;
+    const body = withoutBlankDomain(request.body);
     const current = await findByOrgId(request.params.org_id);
     if (!current) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
@@ -588,6 +632,50 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     return reply.send(toIndexRecord(updated));
+  });
+
+  // Resend the contact-email verification link (the previous one stops working).
+  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/resend-verification', {
+    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    config: {
+      rateLimit: { max: buildConfig().auth.rateLimitMax, timeWindow: buildConfig().auth.rateLimitWindow },
+    },
+    schema: {
+      tags: ['orgs'],
+      summary: 'Send a new verification email for an org whose email is not yet verified',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        200: { type: 'object', required: ['sent'], properties: { sent: { type: 'boolean' } } },
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+        409: apiErrorSchema,
+        429: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const org = await findByOrgId(request.params.org_id);
+    if (!org) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+    if (org.emailVerified) {
+      return reply.code(409).send({ error: 'ALREADY_VERIFIED', detail: 'this email is already verified' });
+    }
+    const verifyToken = randomBytes(32).toString('hex');
+    const renewed = await renewVerifyToken(
+      org.orgId, verifyToken, new Date(Date.now() + VERIFY_TOKEN_TTL_MS), RESEND_COOLDOWN_MS,
+    );
+    if (!renewed) {
+      return reply.code(429).send({
+        error: 'RESEND_COOLDOWN',
+        detail: 'a verification email was sent less than a minute ago — check your inbox, or try again shortly',
+      });
+    }
+    await sendVerificationEmail(renewed.contactEmail, verifyToken, renewed.orgId);
+    return reply.send({ sent: true });
   });
 
   // Suspend org

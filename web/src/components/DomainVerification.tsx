@@ -37,6 +37,12 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 
 // ── Domain verification ─────────────────────────────────────────────────────────
 
+/** The record name relative to the zone — what a provider's "Host" field expects. */
+function hostLabel(recordName: string, domain: string): string {
+  const suffix = `.${domain}`;
+  return recordName.endsWith(suffix) ? recordName.slice(0, -suffix.length) : recordName;
+}
+
 /**
  * Proves ownership of an org's domain via a DNS TXT challenge.
  *
@@ -51,7 +57,9 @@ export function DomainVerification({
   org: IndexRecord;
   onVerified: (updated: IndexRecord) => void;
 }) {
-  const [challenge, setChallenge] = useState<DomainChallenge | null>(null);
+  // Start from the record already issued: generating a new one invalidates
+  // whatever the user has published in DNS, so a reload must not force it.
+  const [challenge, setChallenge] = useState<DomainChallenge | null>(org.pending_domain_challenge ?? null);
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +86,9 @@ export function DomainVerification({
   }
 
   async function generate() {
+    if (challenge && !confirm(
+      "Generate a new DNS record? The TXT value you may already have published will stop working — you'll need to replace it with the new one.",
+    )) return;
     setGenerating(true);
     setError(null);
     try {
@@ -120,9 +131,15 @@ export function DomainVerification({
           </p>
           <div className="space-y-2">
             <CopyRow label="Type" value={challenge.record_type} />
-            <CopyRow label="Name / Host" value={challenge.record_name} />
+            <CopyRow label="Name" value={challenge.record_name} />
+            <CopyRow label="Host" value={hostLabel(challenge.record_name, challenge.domain)} />
             <CopyRow label="Value" value={challenge.record_value} />
           </div>
+          <p className="text-[11px] text-amber-700">
+            Most DNS providers (Namecheap, GoDaddy, Cloudflare…) add your domain automatically — enter
+            only the <span className="font-semibold">Host</span> value, or the record ends up at{" "}
+            <span className="font-mono">{challenge.record_name}.{challenge.domain}</span>.
+          </p>
           <p className="text-[11px] text-amber-600">
             Challenge expires {new Date(challenge.expires_at).toLocaleString()}.
           </p>

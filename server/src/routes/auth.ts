@@ -59,6 +59,16 @@ interface GitHubEmail {
  * Decorator names: fastify.oauth2Google, fastify.oauth2Github
  * (matches the `oauth2X` template literal type from @fastify/oauth2)
  */
+/**
+ * The login-page error code for a failed OAuth sign-in. An existing account
+ * with the same email (e.g. email/password) is not linked automatically —
+ * that would let whoever controls one sign-in method take over the other —
+ * so the user is told to sign in the way they registered.
+ */
+function oauthErrorCode(err: unknown): string {
+  return (err as { code?: unknown }).code === '23505' ? 'account_exists' : 'oauth_failed';
+}
+
 export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
 
@@ -134,7 +144,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
       fastify.log.error(err, 'Google OAuth callback error');
-      return reply.redirect(`${config.frontendUrl}/login?error=oauth_failed`);
+      return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);
     }
   });
 
@@ -376,7 +386,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
       fastify.log.error(err, 'GitHub OAuth callback error');
-      return reply.redirect(`${config.frontendUrl}/login?error=oauth_failed`);
+      return reply.redirect(`${config.frontendUrl}/login?error=${oauthErrorCode(err)}`);
     }
   });
 }

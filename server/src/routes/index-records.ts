@@ -3,6 +3,7 @@ import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexEntry, toI
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { INDEX_ENTRY_SCHEMA } from '../types/api/index-entry.js';
 import { apiErrorSchema } from '../types/api/common.js';
+import { buildConfig } from '../config/index.js';
 
 /**
  * Public read-only routes for the NANDA Index.
@@ -51,16 +52,34 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     return reply.send(toIndexEntry(org));
   });
 
-  // Email verification — marks contact email verified. Activates personal
-  // (no-domain) orgs outright; domain-based orgs still need domain verification.
+  // Links sent before verification moved to the web app point here. Opening a
+  // link must not verify (mail scanners open it first and used to consume the
+  // single-use token), so this only forwards to the page that asks the
+  // recipient to confirm.
   fastify.get<{ Querystring: { token?: string } }>('/api/v1/verify-email', {
     schema: {
       tags: ['auth'],
-      summary: 'Verify org contact email (activates personal orgs; others still need domain verification)',
+      summary: 'Forward an emailed verification link to the web confirmation page',
       querystring: {
         type: 'object',
+        properties: { token: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const token = encodeURIComponent(request.query.token ?? '');
+    return reply.redirect(`${buildConfig().frontendUrl}/verify-email?token=${token}`, 302);
+  });
+
+  // Email verification — marks contact email verified. Activates personal
+  // (no-domain) orgs outright; domain-based orgs still need domain verification.
+  fastify.post<{ Body: { token: string } }>('/api/v1/verify-email', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Verify org contact email (activates personal orgs; others still need domain verification)',
+      body: {
+        type: 'object',
         required: ['token'],
-        properties: { token: { type: 'string', minLength: 1 } },
+        properties: { token: { type: 'string', minLength: 1, maxLength: 128 } },
       },
       response: {
         200: INDEX_RECORD_SCHEMA,
@@ -69,10 +88,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
       },
     },
   }, async (request, reply) => {
-    const { token } = request.query;
-    if (!token) {
-      return reply.code(400).send({ error: 'BAD_REQUEST', detail: 'token query parameter is required' });
-    }
+    const { token } = request.body;
     const org = await markEmailVerifiedByToken(token);
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: 'verification token not found or already used' });

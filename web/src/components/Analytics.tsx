@@ -3,9 +3,11 @@
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { onAnalyticsConsentChange, useAnalyticsConsent } from "@/lib/consent";
 
 /**
- * Google Analytics, without ever sending a query string.
+ * Google Analytics, only after the visitor opts in (ConsentBanner), and
+ * without ever sending a query string.
  *
  * The stock loader reported the full page URL, so a password-reset token
  * (/reset-password?token=…) or a session JWT (/auth/callback?token=…) went to
@@ -29,15 +31,24 @@ function gtag(...args: unknown[]): void {
 export function Analytics({ gaId }: { gaId: string }) {
   const pathname = usePathname() ?? "/";
   const isPrivate = isPrivatePath(pathname);
+  const consent = useAnalyticsConsent();
+
+  // Declining after accepting: GA's own opt-out flag stops it at once,
+  // without waiting for a reload to unload the script.
+  useEffect(() => onAnalyticsConsentChange((value) => {
+    (window as unknown as Record<string, boolean>)[`ga-disable-${gaId}`] = value !== "granted";
+  }), [gaId]);
+
+  const enabled = consent === "granted" && !isPrivate;
 
   useEffect(() => {
-    if (isPrivate) return;
+    if (!enabled) return;
     const pageLocation = window.location.origin + pathname;
     gtag("set", { page_location: pageLocation });
     gtag("event", "page_view", { page_location: pageLocation, page_path: pathname, page_title: document.title });
-  }, [pathname, isPrivate]);
+  }, [pathname, enabled]);
 
-  if (isPrivate) return null;
+  if (!enabled) return null;
 
   const init = `
     window.dataLayer = window.dataLayer || [];

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -403,12 +403,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     return reply.send(toIndexRecord(org));
   });
 
-  // Issue (or rotate) a DNS TXT challenge for the org's domain
+  // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
     preHandler: [fastify.authenticate, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
+      description: 'Returns the outstanding challenge while it is unexpired; a new one is issued only after expiry or a domain change.',
       params: {
         type: 'object',
         required: ['org_id'],
@@ -416,6 +417,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         200: DOMAIN_CHALLENGE_SCHEMA,
+        400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
       },
@@ -426,20 +428,24 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
-    const token = randomBytes(32).toString('hex');
+    if (!org.domain) {
+      return reply.code(400).send({ error: 'NO_DOMAIN', detail: 'this org has no domain to verify (personal email-identity org)' });
+    }
+
+    const candidate = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
 
-    const updated = await setDomainChallenge(org.orgId, token, expiresAt);
-    if (!updated) {
+    const updated = await issueDomainChallenge(org.orgId, candidate, expiresAt);
+    if (!updated?.domain || !updated.domainChallenge || !updated.domainChallengeExpiresAt) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
     return reply.send({
       domain:       updated.domain,
-      record_name:  challengeRecordName(updated.domain!),
+      record_name:  challengeRecordName(updated.domain),
       record_type:  'TXT',
-      record_value: challengeRecordValue(token),
-      expires_at:   expiresAt.toISOString(),
+      record_value: challengeRecordValue(updated.domainChallenge),
+      expires_at:   updated.domainChallengeExpiresAt.toISOString(),
     });
   });
 

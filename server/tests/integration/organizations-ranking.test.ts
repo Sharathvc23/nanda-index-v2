@@ -21,11 +21,11 @@ async function seedOrg(opts: {
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status,
-       description, tags, representative_queries, identifier)
+       domain_verified, description, tags, representative_queries, identifier)
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
        ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true,
-       ${opts.status ?? 'active'},
+       ${opts.status ?? 'active'}, true,
        ${opts.description ?? null},
        ${sql.array(opts.tags ?? [])},
        ${sql.array(opts.representativeQueries ?? [])},

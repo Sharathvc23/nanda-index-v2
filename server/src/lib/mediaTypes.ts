@@ -57,6 +57,17 @@ export const ARD_FINDER_MEDIA_TYPE: NandaMediaType = NANDA_MEDIA_TYPE.AI_REGISTR
  */
 export const CATALOG_MEDIA_TYPES: readonly NandaMediaType[] = [NANDA_MEDIA_TYPE.AI_CATALOG, NANDA_MEDIA_TYPE.AI_REGISTRY];
 
+/**
+ * Types that describe exactly one resource. A personal entry (email-proven,
+ * no domain) may only be one of these: catalogs and registries are fanned out
+ * to and referred to as authorities, which requires DNS proof of a domain.
+ */
+export const SINGLE_RESOURCE_MEDIA_TYPES: readonly NandaMediaType[] = [
+  NANDA_MEDIA_TYPE.A2A_CARD,
+  NANDA_MEDIA_TYPE.MCP_CARD,
+  NANDA_MEDIA_TYPE.AGENT_SKILL,
+];
+
 /** ARD `type` vocabulary — the target of NANDA→ARD media-type mapping. */
 export const ARD_MEDIA_TYPE = {
   AI_REGISTRY: 'application/ai-registry+json',

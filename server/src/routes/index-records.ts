@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexEntry, toIndexRecord } from '../db/queries/organizations.js';
+import { findActiveByOrgId, findAllActive, markEmailVerifiedByToken, toIndexEntry, toIndexRecord } from '../db/queries/organizations.js';
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { INDEX_ENTRY_SCHEMA } from '../types/api/index-entry.js';
 import { apiErrorSchema } from '../types/api/common.js';
@@ -8,7 +8,8 @@ import { apiErrorSchema } from '../types/api/common.js';
  * Public read-only routes for the NANDA Index.
  *
  * GET /api/v1/index           — list all active entries, in the paper's AI Catalog entry shape
- * GET /api/v1/index/:org_id   — get a single entry (same shape), 404 on miss
+ * GET /api/v1/index/:org_id   — get a single active entry (same shape); 404 on
+ *                                miss, and for pending/suspended orgs
  * GET /api/v1/verify-email    — mark org contact email verified (also activates
  *                                personal/no-domain orgs; domain-based orgs
  *                                still need domain verification separately)
@@ -28,11 +29,12 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     return reply.send(orgs.map(toIndexEntry));
   });
 
-  // Get a single index record by org_id
+  // Get a single active index record by org_id
   fastify.get<{ Params: { org_id: string } }>('/api/v1/index/:org_id', {
     schema: {
       tags: ['index'],
-      summary: 'Get a single index entry (AI Catalog entry shape)',
+      summary: 'Get a single active index entry (AI Catalog entry shape)',
+      description: 'Pending and suspended entries are not public: they return 404, the same as an unknown org_id.',
       params: {
         type: 'object',
         required: ['org_id'],
@@ -44,7 +46,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
       },
     },
   }, async (request, reply) => {
-    const org = await findByOrgId(request.params.org_id);
+    const org = await findActiveByOrgId(request.params.org_id);
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }

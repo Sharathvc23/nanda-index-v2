@@ -161,6 +161,19 @@ export async function findByOrgId(orgId: string): Promise<Organization | null> {
 }
 
 /**
+ * Finds an active organization by its org_id slug — the public lookup.
+ * Pending and suspended orgs are treated as not found, the same as
+ * findAllActive, so an unverified domain claim is never publicly readable.
+ */
+export async function findActiveByOrgId(orgId: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations WHERE org_id = ${orgId} AND status = 'active' LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/**
  * Finds an organization by domain name.
  * Returns null if not found.
  */

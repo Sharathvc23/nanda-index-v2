@@ -15,3 +15,8 @@ try {
 // no real DNS, so the agentic-search SSRF guard is off by default here. Tests
 // that exercise the guard set OUTBOUND_ALLOW_PRIVATE_HOSTS=false explicitly.
 process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] ??= 'true';
+
+// Suites register many orgs from one test user and one IP; the production
+// anti-abuse limits would trip them. Tests that exercise a limit set it.
+process.env['MAX_UNPROVEN_ORGS_PER_USER'] ??= '1000';
+process.env['ORG_WRITE_RATE_LIMIT_MAX'] ??= '10000';

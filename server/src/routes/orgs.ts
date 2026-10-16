@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, isProven, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -167,37 +167,44 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   return null;
 }
 
-/** Rejects an identifier or domain another entry already holds. */
 /**
- * A personal registration whose email was never verified and whose
- * verification link has expired can never activate (there is no resend), so
- * it must not keep holding the identifier: otherwise anyone could register a
- * victim's email and lock them out of their own identifier forever. Domain
- * rows are excluded — they activate via DNS, independently of the email link.
+ * An unproven org that has held its org_id slug longer than the hold period
+ * gives the slug up. Suspending it does not extend the hold: an unproven claim
+ * is never published, so keeping it only serves to block someone else.
  */
-function isAbandonedPersonal(org: Organization, now: Date = new Date()): boolean {
-  return org.domain === null
-    && org.status === 'pending'
-    && !org.emailVerified
-    && (org.verifyTokenExpiresAt === null || org.verifyTokenExpiresAt <= now);
+function isAbandonedClaim(org: Organization, now: Date = new Date()): boolean {
+  // An org that ever proved ownership is a real org that may have lost its
+  // proof (e.g. a domain change awaiting re-verification) — never auto-deleted.
+  if (org.everProven || isProven(org)) return false;
+  const holdMs = buildConfig().claims.unprovenSlugHoldHours * 60 * 60 * 1000;
+  return now.getTime() - org.createdAt.getTime() >= holdMs;
 }
 
 /**
- * Rejects an identifier or domain another entry already holds. An abandoned
- * personal registration holding the identifier is deleted instead, freeing it.
+ * Rejects an identifier or domain a *proven* entry holds. Unproven claims
+ * reserve nothing — any number may target the same domain or email, and the
+ * first to prove ownership wins (markDomainVerified / markEmailVerifiedByToken
+ * then remove the rest). So registering mit.edu without controlling its DNS
+ * cannot block MIT.
  */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
-  const byIdentifier = await findByIdentifier(identifier);
+  const byIdentifier = await findProvenByIdentifier(identifier);
   if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    if (!isAbandonedPersonal(byIdentifier)) {
-      return conflictError(`identifier "${identifier}" is already registered`);
-    }
-    await deleteOrganization(byIdentifier.orgId);
+    return conflictError(`identifier "${identifier}" is already registered`);
   }
-  const byDomain = domain ? await findByDomain(domain) : null;
+  const byDomain = domain ? await findProvenByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
     return conflictError(`domain "${domain}" is already registered`);
   }
+  return null;
+}
+
+/** org_id is a global handle: free unless held by a fresh or proven org. */
+async function findSlugConflict(orgId: string): Promise<ApiError | null> {
+  const holder = await findByOrgId(orgId);
+  if (!holder) return null;
+  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`);
+  await deleteOrganization(holder.orgId);
   return null;
 }
 
@@ -282,9 +289,17 @@ function requireOrgRole(level: 'member' | 'admin') {
  *   DELETE /api/v1/orgs/:org_id                  — permanently delete org    (admin)
  */
 export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void> {
+  // Registration and edits send email and may call the LLM enrichment API, so
+  // they are throttled per client IP (the rate-limit plugin is opt-in).
+  const { claims } = buildConfig();
+  const orgWriteRateLimit = {
+    rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
+  };
+
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
     preHandler: [fastify.authenticate],
+    config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Register a new organization (creates index record)',
@@ -327,11 +342,19 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const profile = buildProfileOrError(body, path);
     if ('status' in profile) return reply.code(profile.status).send(profile.body);
 
-    if (await findByOrgId(body.org_id)) {
-      return reply.code(409).send({ error: 'CONFLICT', detail: `org_id "${body.org_id}" is already taken` });
+    const claims = buildConfig().claims;
+    if (await countUnprovenOrgsForUser(user.userId, claims.unprovenSlugHoldHours) >= claims.maxUnprovenPerUser) {
+      return reply.code(429).send({
+        error: 'TOO_MANY_UNVERIFIED',
+        detail: `you already have ${claims.maxUnprovenPerUser} unverified registrations — verify or delete one first`,
+      });
     }
+    // Every check that can refuse runs before an expired slug holder is
+    // released, so a request that fails never destroys someone else's claim.
     const conflict = await findConflict(profile.identifier, body.domain ?? null);
     if (conflict) return reply.code(conflict.status).send(conflict.body);
+    const slugConflict = await findSlugConflict(body.org_id);
+    if (slugConflict) return reply.code(slugConflict.status).send(slugConflict.body);
 
     const verifyToken = randomBytes(32).toString('hex');
     const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
@@ -459,6 +482,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
@@ -491,7 +515,16 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       });
     }
 
-    const updated = await markDomainVerified(org.orgId);
+    let updated: Organization | null;
+    try {
+      updated = await markDomainVerified(org.orgId);
+    } catch (err) {
+      // Another registrant proved this domain an instant earlier — first proof wins.
+      if (isUniqueViolation(err)) {
+        return reply.code(409).send({ error: 'CONFLICT', detail: `domain "${org.domain}" was verified by another registration` });
+      }
+      throw err;
+    }
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
@@ -502,6 +535,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
     preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectUnknownUpdateFields],
+    config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Update your organization\'s index record',
@@ -631,11 +665,15 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         200: INDEX_RECORD_SCHEMA,
         403: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
     const reactivated = await reactivateOrganization(request.params.org_id);
     if (!reactivated) {
+      if (await findByOrgId(request.params.org_id)) {
+        return reply.code(409).send({ error: 'NOT_SUSPENDED', detail: 'only a suspended organization can be reactivated' });
+      }
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 

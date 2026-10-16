@@ -265,6 +265,10 @@ export default function OrgDetailPage() {
                 {reactivating ? "Reactivating…" : "Reactivate"}
               </button>
             </div>
+          ) : org.status === "pending" ? (
+            <p className="text-sm text-rose-700">
+              This organization is not public yet — it appears in the index once ownership is verified.
+            </p>
           ) : (
             <div className="flex items-center justify-between">
               <p className="text-sm text-rose-700">Suspending removes this org from public index results. You can reactivate it later.</p>

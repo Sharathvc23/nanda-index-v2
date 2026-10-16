@@ -32,6 +32,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const config = buildConfig();
 
   const fastify = Fastify({
+    // Behind Caddy, request.ip must be the visitor's address, not the proxy's —
+    // otherwise every per-IP rate limit is one bucket shared by all users.
+    // Only the configured number of hops is trusted, so a client reaching the
+    // API directly cannot pick its own address via X-Forwarded-For.
+    ...(config.trustProxyHops > 0 ? { trustProxy: config.trustProxyHops } : {}),
     logger:
       options.logger === false
         ? false

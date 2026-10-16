@@ -8,7 +8,7 @@ async function seedOrg(
   orgId: string,
   domain: string | null,
   displayName: string,
-  opts: { status?: string; emailVerified?: boolean; verifyToken?: string } = {},
+  opts: { status?: string; emailVerified?: boolean; verifyToken?: string; domainVerified?: boolean } = {},
 ): Promise<void> {
   const sql = getSql();
   const token = opts.verifyToken ?? randomBytes(16).toString('hex');
@@ -18,11 +18,12 @@ async function seedOrg(
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
-       verify_token, verify_token_expires_at, email_verified, status, identifier)
+       verify_token, verify_token_expires_at, email_verified, status, identifier, domain_verified)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${contactEmail},
        ${registryUrl}, ${token}, NOW() + INTERVAL '24 hours',
-       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier})
+       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier},
+       ${opts.domainVerified ?? false})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }
@@ -111,7 +112,8 @@ describe('NANDA Index — public read routes', () => {
   });
 
   it('returns a single paper-shaped record by org_id', async () => {
-    await seedOrg('idx-single', 'single.example.com', 'Single Org');
+    // Only a live entry (active, ownership proven) is publicly readable.
+    await seedOrg('idx-single', 'single.example.com', 'Single Org', { domainVerified: true });
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/index/idx-single' });
     expect(res.statusCode).toBe(200);

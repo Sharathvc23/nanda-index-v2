@@ -18,6 +18,7 @@ function makeOrg(overrides: Partial<RankedOrganization>): RankedOrganization {
     domainChallenge: null,
     domainChallengeExpiresAt: null,
     domainVerifiedAt: new Date(),
+    everProven: true,
     ttlSeconds: 86400,
     status: 'active',
     createdAt: new Date(),

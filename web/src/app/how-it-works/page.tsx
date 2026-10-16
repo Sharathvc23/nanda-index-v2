@@ -10,6 +10,8 @@ const FLOWS: {
   title: string;
   subtitle: string;
   identifier: string;
+  /** The identifier is a paper example, not a live entry you can resolve. */
+  illustrative?: boolean;
   mediaType: string;
   who: string;
   steps: { label: string; detail: string }[];
@@ -19,7 +21,7 @@ const FLOWS: {
       id: "enterprise-ai-catalog",
       title: "Enterprise AI Catalog",
       subtitle: "Teams / Orgs",
-      identifier: "urn:air:example.com:catalog:root",
+      identifier: "urn:air:regentix.ai:catalog:root",
       mediaType: "application/ai-catalog+json",
       who: "This is the simple case. An enterprise publishes at .well-known/ai-catalog.json. Any requester can fetch it directly, so direct resolution works and NANDA Index is not required. A NANDA Index entry is optional: useful for federation, fallback, and anti-squatting.",
       steps: [
@@ -35,6 +37,7 @@ const FLOWS: {
       title: "DNS-Based Service Discovery",
       subtitle: "Enterprise / DNS",
       identifier: "urn:air:skyblue.com:agent:refunds",
+      illustrative: true,
       mediaType: "application/a2a-agent-card+json",
       who: "SkyBlue uses DNS-based service discovery via SVCB (RFC 9460). NANDA Index makes this DNS-based discovery path reachable from the global switchboard while representing the target using a recognized A2A Agent Card type.",
       steps: [
@@ -49,7 +52,7 @@ const FLOWS: {
       id: "smb-agent-card",
       title: "SMB Agent Card",
       subtitle: "Small Business",
-      identifier: "urn:air:moonbakery.com:agent:orders",
+      identifier: "urn:air:moonbakery39.com:agent:orders",
       mediaType: "application/a2a-agent-card+json",
       who: "Moon Bakery owns a domain but runs no enterprise infrastructure. Its runtime, agent card, and domain are with three separate providers, a practical example of permissionless deployment. It needs only a stable resource identifier and a delegated path: no dedicated agent-discovery DNS records, enterprise gateway, or organization-operated catalog endpoint required. NANDA Index becomes the primary discovery entry point.",
       steps: [
@@ -65,6 +68,7 @@ const FLOWS: {
       title: "Personal Agent",
       subtitle: "Individual",
       identifier: "urn:air:host39.org:personal:john@hotmail.com",
+      illustrative: true,
       mediaType: "application/a2a-agent-card+json",
       who: "John has no domain. His runtime is on Azure; his agent card is with a third-party host. No personal controlled domain is required. The AIR identifier is anchored to the card host (host39.org) and the account email is carried as subjectAccount. NANDA Index enables identity-first discovery for individuals, when the underlying account identity is verifiably bound to the resolution record.",
       steps: [
@@ -89,7 +93,7 @@ const STAGES = [
     label: "Resource Identifier / Lookup Key",
     definition:
       "a stable identifier used to initiate resolution, such as a domain, DID, or provider-verified account identifier. As an AI Catalog/ARD entry identifier it uses the domain-anchored form urn:air:<publisher-FQDN>:<namespace...>:<short-name>.",
-    input: "urn:air:example.com:catalog:root, urn:air:skyblue.com:agent:refunds, urn:air:moonbakery.com:agent:orders, or urn:air:host39.org:personal:john@hotmail.com",
+    input: "urn:air:regentix.ai:catalog:root or urn:air:moonbakery39.com:agent:orders (live entries you can resolve), or the illustrative urn:air:skyblue.com:agent:refunds and urn:air:host39.org:personal:john@hotmail.com",
   },
   {
     id: "resolution",
@@ -97,7 +101,7 @@ const STAGES = [
     definition: "selection of an authoritative discovery entry point.",
     detail:
       "The resolver sends the identifier to the NANDA Index API. An exact match returns that entry (a catalog, an agent card, or a DNS SVCB pointer); otherwise, if the publisher fronts its resources with an AI Catalog, that catalog entry is returned (match: publisher) for the requester to look inside. Each record carries a TTL for caching.",
-    input: "locator: urn:air:acme.com:agent:time",
+    input: "locator: urn:air:regentix.ai:agent:regentix-ceo (resolves to the Regentix catalog, match: publisher)",
     output: "{ match, identifier, entry { identifier, displayName, type, url, publisher, extensions } }",
     api: "GET /api/v1/resolve?locator=…",
   },
@@ -166,6 +170,7 @@ export default function HowItWorksPage() {
             </h3>
             <p className="mt-1 text-sm text-ink-medium">
               Identifier: <span className="font-mono text-xs">{flow.identifier}</span>
+              {flow.illustrative && <span className="text-xs text-ink-weak"> (illustrative example)</span>}
               <br />
               Media type: <span className="font-mono text-xs">{flow.mediaType}</span>
             </p>

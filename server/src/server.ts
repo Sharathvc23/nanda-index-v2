@@ -14,6 +14,7 @@ import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
+import { registerAvailabilityRoute } from './routes/availability.js';
 import { registerMeRoute } from './routes/me.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { registerAgenticSearchRoutes } from './routes/agentic-search.js';
@@ -57,6 +58,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAuthRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
+  await registerAvailabilityRoute(fastify);
   await registerMeRoute(fastify);
   await registerSearchRoutes(fastify);
   await registerAgenticSearchRoutes(fastify);

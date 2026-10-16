@@ -82,6 +82,12 @@ export interface DomainChallenge {
   expires_at: string;
 }
 
+/** GET /api/v1/availability — only the fields that were asked about are present. */
+export interface Availability {
+  org_id_available?: boolean;
+  domain_available?: boolean;
+}
+
 /** AI Catalog CatalogEntry (agent-card.github.io/ai-catalog). `url` XOR `data`. */
 export interface CatalogEntry {
   identifier: string;

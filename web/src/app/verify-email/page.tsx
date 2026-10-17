@@ -4,10 +4,57 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
+import { StatusBadge } from "@/components/StatusBadge";
+import { JsonPanel } from "@/components/JsonPanel";
 import { ApiError, verifyEmail } from "@/lib/nanda-api";
+import type { IndexRecord } from "@/lib/nanda-types";
 
 const primaryBtnClass =
   "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition disabled:opacity-60";
+
+function domainLabel(org: IndexRecord): string {
+  if (!org.domain) return "None (personal entry)";
+  return `${org.domain} — ${org.domain_verified ? "verified" : "not verified yet"}`;
+}
+
+/** Success view: a plain-language confirmation, then the record the index now holds. */
+function EmailConfirmed({ org }: { org: IndexRecord }) {
+  const active = org.status === "active";
+  return (
+    <div className="space-y-5">
+      <div className="bg-surface-light rounded-card border border-line p-8 shadow-card space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
+            ✓
+          </span>
+          <h2 className="text-lg font-semibold text-ink-strong">Your email is confirmed</h2>
+        </div>
+        <p className="text-sm text-ink-medium">
+          {active
+            ? "Your entry is now live in the index."
+            : "Next, verify your domain from the dashboard to make your entry live."}{" "}
+          <Link href={`/dashboard/orgs/${encodeURIComponent(org.org_id)}`} className="underline hover:text-brand-600">
+            Go to the dashboard
+          </Link>
+          .
+        </p>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt className="text-ink-weak">Organization</dt>
+          <dd className="min-w-0 text-ink-strong">
+            {org.display_name} <span className="font-mono text-xs text-ink-weak">({org.org_id})</span>
+          </dd>
+          <dt className="text-ink-weak">Status</dt>
+          <dd><StatusBadge status={org.status} /></dd>
+          <dt className="text-ink-weak">Domain</dt>
+          <dd className="min-w-0 break-all text-ink-strong">{domainLabel(org)}</dd>
+          <dt className="text-ink-weak">Identifier</dt>
+          <dd className="min-w-0 break-all font-mono text-xs text-ink-strong">{org.identifier}</dd>
+        </dl>
+      </div>
+      <JsonPanel data={org} />
+    </div>
+  );
+}
 
 /**
  * Confirms a contact email. Verification happens on the button press, not on
@@ -24,14 +71,13 @@ function VerifyEmailInner() {
   }, [tokenFromUrl]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [verifiedOrg, setVerifiedOrg] = useState<{ id: string; active: boolean } | null>(null);
+  const [verifiedOrg, setVerifiedOrg] = useState<IndexRecord | null>(null);
 
   async function onConfirm() {
     setLoading(true);
     setError(null);
     try {
-      const org = await verifyEmail(token);
-      setVerifiedOrg({ id: org.org_id, active: org.status === "active" });
+      setVerifiedOrg(await verifyEmail(token));
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 404
@@ -43,6 +89,16 @@ function VerifyEmailInner() {
     }
   }
 
+  if (verifiedOrg) {
+    return (
+      <PageShell title="Verify your email" description="Confirm the contact email for your NANDA Index registration.">
+        <div className="mx-auto max-w-2xl">
+          <EmailConfirmed org={verifiedOrg} />
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell title="Verify your email" description="Confirm the contact email for your NANDA Index registration.">
       <div className="mx-auto max-w-md space-y-5">
@@ -52,17 +108,6 @@ function VerifyEmailInner() {
               This verification link is invalid or incomplete. Open your{" "}
               <Link href="/dashboard" className="underline hover:text-brand-600">dashboard</Link>{" "}
               to send a new one.
-            </p>
-          ) : verifiedOrg ? (
-            <p className="text-sm text-ink-medium">
-              Email verified for <span className="font-mono">{verifiedOrg.id}</span>.{" "}
-              {verifiedOrg.active
-                ? "It is now live in the index."
-                : "Next, verify your domain from the dashboard to make it live."}{" "}
-              <Link href={`/dashboard/orgs/${encodeURIComponent(verifiedOrg.id)}`} className="underline hover:text-brand-600">
-                Go to the dashboard
-              </Link>
-              .
             </p>
           ) : (
             <>

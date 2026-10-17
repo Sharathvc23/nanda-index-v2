@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
@@ -13,7 +13,12 @@ const primaryBtnClass =
   "inline-flex items-center justify-center h-9 w-full rounded-control bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 transition disabled:opacity-60";
 
 function ResetPasswordInner() {
-  const token = useSearchParams().get("token") ?? "";
+  // Read the token once, then drop it from the address bar and history.
+  const tokenFromUrl = useSearchParams().get("token") ?? "";
+  const [token] = useState(tokenFromUrl);
+  useEffect(() => {
+    if (tokenFromUrl) window.history.replaceState(null, "", window.location.pathname);
+  }, [tokenFromUrl]);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);

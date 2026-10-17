@@ -619,23 +619,36 @@ export async function deleteOrganization(orgId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Escapes LIKE wildcards so user input matches literally. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 /**
- * Full-text keyword search across org_id, domain, and display_name.
- * Returns active organizations matching the query.
+ * Keyword search over active organizations: a substring match on org_id,
+ * domain, display_name and identifier, plus a full-text match on what the
+ * entry describes (tags, description, representative queries — the
+ * search_vector column). Exact org_id/identifier matches rank first, then by
+ * full-text relevance.
  */
 export async function searchOrganizations(query: string): Promise<Organization[]> {
   const sql = getSql();
-  const pattern = `%${query.toLowerCase()}%`;
+  const lowered = query.toLowerCase();
+  const pattern = `%${escapeLike(lowered)}%`;
   return sql<Organization[]>`
     SELECT * FROM organizations
     WHERE status = 'active' AND moderation = 'none'
       AND (
-        LOWER(org_id)        LIKE ${pattern}
-        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern}
-        OR LOWER(display_name)              LIKE ${pattern}
-        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern}
+        LOWER(org_id)                       LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(display_name)              LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern} ESCAPE '\\'
+        OR search_vector @@ websearch_to_tsquery('english', ${query})
       )
-    ORDER BY org_id ASC
+    ORDER BY
+      (LOWER(org_id) = ${lowered} OR LOWER(COALESCE(identifier, '')) = ${lowered}) DESC,
+      ts_rank(search_vector, websearch_to_tsquery('english', ${query})) DESC,
+      org_id ASC
     LIMIT 50
   `;
 }

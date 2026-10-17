@@ -8,7 +8,7 @@ interface SearchQuerystring {
   q: string;
 }
 
-/** Keyword search across org_id, domain, and display_name. */
+/** Keyword search across names and identifiers, plus tags and descriptions. */
 export async function registerSearchRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: SearchQuerystring }>('/api/v1/search', {
     config: publicReadRateLimit(),

@@ -9,7 +9,8 @@ import { findResolvedEntry } from './resolution.js';
  * - A urn:air: identifier resolves exactly as GET /api/v1/resolve does
  *   (exact entry, else the publisher's catalog).
  * - Anything else runs a keyword search across org_id, domain,
- *   display_name and identifier.
+ *   display_name and identifier, and over tags, description and
+ *   representative queries (see searchOrganizations).
  */
 export async function searchOrgs(rawQuery: string): Promise<SearchResponse> {
   const query = rawQuery.trim();

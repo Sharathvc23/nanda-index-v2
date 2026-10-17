@@ -1,6 +1,6 @@
 import type postgres from 'postgres';
 import { getSql } from '../client.js';
-import { DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
+import { CATALOG_MEDIA_TYPES, DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, NANDA_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 
 /** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
 const TEXT_OID = 25;
@@ -594,6 +594,8 @@ export async function rankOrganizationsForQuery(
       WHERE status = 'active'
         AND registry_url IS NOT NULL
         AND media_type <> ${POINTER_ONLY_MEDIA_TYPE}
+        -- Catalogs and registries are fanned out to / referred to: domain proof required.
+        AND (domain_verified OR media_type NOT IN (${NANDA_MEDIA_TYPE.AI_CATALOG}, ${NANDA_MEDIA_TYPE.AI_REGISTRY}))
         AND search_vector @@ to_tsquery('english', ${orQuery})
       ORDER BY rank DESC
       LIMIT ${limit}
@@ -604,6 +606,7 @@ export async function rankOrganizationsForQuery(
   const fallback = await searchOrganizations(query);
   return fallback
     .filter((o) => o.registryUrl != null && o.mediaType !== POINTER_ONLY_MEDIA_TYPE)
+    .filter((o) => o.domainVerified || !(CATALOG_MEDIA_TYPES as readonly string[]).includes(o.mediaType))
     .slice(0, limit)
     .map((o) => ({ ...o, rank: 0 }));
 }
@@ -627,6 +630,8 @@ export async function listCatalogsToProbe(
     WHERE status = 'active'
       AND registry_url IS NOT NULL
       AND media_type = ${ENTERPRISE_MEDIA_TYPE}
+      -- Only a proven domain may be fanned out to on every search.
+      AND domain_verified
       AND NOT (org_id = ANY(${sql.array([...excludeOrgIds], TEXT_OID)}))
     ORDER BY updated_at DESC
     LIMIT ${limit}

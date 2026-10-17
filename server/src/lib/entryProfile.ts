@@ -1,5 +1,5 @@
 import type { PublisherBlock } from '../types/api/index-record.js';
-import { NANDA_MEDIA_TYPE, NANDA_MEDIA_TYPES } from './mediaTypes.js';
+import { NANDA_MEDIA_TYPE, NANDA_MEDIA_TYPES, SINGLE_RESOURCE_MEDIA_TYPES } from './mediaTypes.js';
 import {
   PERSONAL_CARD_HOST,
   buildAirUrn,
@@ -161,6 +161,13 @@ export function buildEntryProfile(input: EntryProfileInput): EntryProfile {
   const isPersonal = input.path === 'personal';
   if (!isPersonal && !input.domain) {
     throw new EntryProfileError(`domain is required for the ${input.path} hosting path`);
+  }
+
+  if (isPersonal && input.mediaType !== undefined
+    && !(SINGLE_RESOURCE_MEDIA_TYPES as readonly string[]).includes(input.mediaType)) {
+    throw new EntryProfileError(
+      'personal registrations can publish an agent card, MCP server card or skill — catalogs and registries need a verified domain',
+    );
   }
 
   const email = input.contactEmail.trim().toLowerCase();

@@ -17,13 +17,27 @@ const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
 export class ApiError extends Error {
   status: number;
   payload?: unknown;
+  /** Machine-readable `error` field from the API body, when present. */
+  code: string | null;
 
-  constructor(message: string, status: number, payload?: unknown) {
+  constructor(message: string, status: number, payload?: unknown, code: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
+    this.code = code;
   }
+}
+
+/** Server code for org writes attempted before the account email is verified. */
+export const ACCOUNT_NOT_VERIFIED = "ACCOUNT_NOT_VERIFIED";
+
+export const ACCOUNT_NOT_VERIFIED_MESSAGE =
+  "Verify your email to register and manage agents. Use the link we emailed you, " +
+  "or resend it from your dashboard.";
+
+export function isAccountNotVerified(err: unknown): boolean {
+  return err instanceof ApiError && err.code === ACCOUNT_NOT_VERIFIED;
 }
 
 async function parseApiResponse<T>(res: Response): Promise<T> {
@@ -39,11 +53,14 @@ async function parseApiResponse<T>(res: Response): Promise<T> {
     const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
     const errorCode = typeof obj["error"] === "string" ? obj["error"] : null;
     const detail = typeof obj["detail"] === "string" ? obj["detail"] : null;
+    // The verification gate can hit any org write; give every screen the same
+    // human message instead of the raw code.
     const message =
+      errorCode === ACCOUNT_NOT_VERIFIED ? ACCOUNT_NOT_VERIFIED_MESSAGE :
       detail && errorCode ? `${errorCode} — ${detail}` :
       detail ?? errorCode ??
       (typeof obj["message"] === "string" ? obj["message"] : `Request failed with status ${res.status}`);
-    throw new ApiError(message, res.status, data);
+    throw new ApiError(message, res.status, data, errorCode);
   }
 
   return data as T;
@@ -174,6 +191,25 @@ export async function resetPassword(token: string, password: string): Promise<vo
   await request<{ ok: boolean }>("/auth/reset-password", {
     method: "POST",
     body: JSON.stringify({ token, password }),
+  });
+}
+
+/**
+ * POST /auth/verify-account — confirm the account email with the emailed token.
+ * Called on an explicit button press, never on page load (mail scanners
+ * prefetch links).
+ */
+export async function verifyAccount(token: string): Promise<void> {
+  await request<{ ok: boolean }>("/auth/verify-account", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** POST /auth/resend-account-verification — email a fresh verification link. */
+export async function resendAccountVerification(): Promise<{ ok: boolean; already_verified?: boolean }> {
+  return request<{ ok: boolean; already_verified?: boolean }>("/auth/resend-account-verification", {
+    method: "POST",
   });
 }
 

@@ -1,24 +1,45 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import bcrypt from 'bcryptjs';
 import {
   upsertUser,
   findUserByEmail,
   createUserWithPassword,
-  recordFailedLogin,
-  clearLoginFailures,
   updateUserPassword,
+  type User,
 } from '../db/queries/users.js';
+import {
+  isLoginLocked,
+  recordLoginFailure,
+  clearLoginFailures,
+  clearAllLoginFailures,
+} from '../db/queries/loginFailures.js';
 import {
   createResetToken,
   findValidResetToken,
   markResetTokenUsed,
   hashResetToken,
 } from '../db/queries/passwordResetTokens.js';
-import { sendPasswordResetEmail } from '../services/email.js';
+import { issueAccountVerifyToken } from '../db/queries/accountVerification.js';
+import { sendPasswordResetEmail, sendAccountVerificationEmail } from '../services/email.js';
 import { buildConfig } from '../config/index.js';
 import { apiErrorSchema } from '../types/api/common.js';
 
 const BCRYPT_ROUNDS = 10;
+
+// Unknown emails (and OAuth-only accounts) are compared against this hash so
+// a failed login costs one bcrypt compare either way — response time must not
+// reveal whether an account exists.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('nanda-index-dummy-password', BCRYPT_ROUNDS);
+
+const INVALID_CREDENTIALS = { error: 'UNAUTHORIZED', detail: 'invalid email or password' } as const;
+
+/** Signs a session JWT carrying the user's current token_version (see plugins/jwt.ts). */
+function signSession(reply: FastifyReply, user: User, expiresIn: string): Promise<string> {
+  return reply.jwtSign(
+    { userId: user.id, email: user.email, displayName: user.displayName, tokenVersion: user.tokenVersion },
+    { expiresIn },
+  );
+}
 
 const jwtResponseSchema = {
   type: 'object',
@@ -31,6 +52,7 @@ const jwtResponseSchema = {
 interface GoogleUserInfo {
   id: string;
   email: string;
+  verified_email?: boolean;
   name?: string;
   picture?: string;
 }
@@ -124,12 +146,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         avatarUrl:   profile.picture ?? null,
         provider:    'google',
         providerId:  profile.id,
+        // Google reports whether it has verified the address; trust only that.
+        emailVerified: profile.verified_email !== false,
       });
 
-      const token = await reply.jwtSign(
-        { userId: user.id, email: user.email, displayName: user.displayName },
-        { expiresIn: config.jwt.expiresIn },
-      );
+      const token = await signSession(reply, user, config.jwt.expiresIn);
 
       return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
@@ -165,6 +186,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     async (request, reply) => {
       const { email, password, display_name } = request.body;
 
+      // A 409 here does confirm that an email is registered. That is hard to
+      // avoid while sign-up returns a session straight away: it cannot hand
+      // out a session for someone else's account, and a fake 201 would break
+      // the client. The per-IP rate limit on this route bounds probing, and
+      // the dashboard stays locked until the email is verified.
       const existing = await findUserByEmail(email);
       if (existing) {
         return reply.code(409).send({ error: 'CONFLICT', detail: 'email already registered' });
@@ -173,11 +199,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const user = await createUserWithPassword(email, passwordHash, display_name ?? null);
 
-      const token = await reply.jwtSign(
-        { userId: user.id, email: user.email, displayName: user.displayName },
-        { expiresIn: config.jwt.expiresIn },
-      );
+      // The session is returned even though the email is unverified, so the
+      // dashboard can show the "verify your email" prompt. Org writes stay
+      // blocked (requireVerifiedAccount) until the link is used.
+      try {
+        const verifyToken = await issueAccountVerifyToken(user.id);
+        if (verifyToken) await sendAccountVerificationEmail(user.email, verifyToken);
+      } catch (err) {
+        // Sign-up still succeeds; the user can resend from the dashboard.
+        fastify.log.error(err, 'failed to send account verification email');
+      }
 
+      const token = await signSession(reply, user, config.jwt.expiresIn);
       return reply.code(201).send({ token });
     },
   );
@@ -207,34 +240,32 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
     async (request, reply) => {
       const { email, password } = request.body;
+      const ip = request.ip;
 
-      const user = await findUserByEmail(email);
-      if (!user || !user.passwordHash) {
-        return reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'invalid email or password' });
-      }
-
-      // Soft lockout: reject while an active lock window is in effect.
-      if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      // Soft lockout per (email, client IP): an attacker's failures lock only
+      // the attacker's IP, never the real owner signing in from elsewhere.
+      // Checked before the user lookup so known and unknown emails behave alike.
+      if (await isLoginLocked(email, ip)) {
         return reply.code(429).send({
           error:  'TOO_MANY_ATTEMPTS',
-          detail: 'account temporarily locked due to repeated failed logins; try again later',
+          detail: 'too many failed sign-in attempts from this network; try again later',
         });
       }
 
-      const valid = await bcrypt.compare(password, user.passwordHash);
-      if (!valid) {
-        await recordFailedLogin(user.id, config.auth.maxLoginAttempts, config.auth.lockoutMinutes);
-        return reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'invalid email or password' });
+      const user = await findUserByEmail(email);
+      const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+      if (!user || !user.passwordHash || !valid) {
+        await recordLoginFailure(email, ip, {
+          maxAttempts:    config.auth.maxLoginAttempts,
+          lockoutMinutes: config.auth.lockoutMinutes,
+        });
+        return reply.code(401).send(INVALID_CREDENTIALS);
       }
 
-      // Successful login clears any accumulated failures / lock.
-      await clearLoginFailures(user.id);
+      // Successful login clears this IP's accumulated failures / lock.
+      await clearLoginFailures(email, ip);
 
-      const token = await reply.jwtSign(
-        { userId: user.id, email: user.email, displayName: user.displayName },
-        { expiresIn: config.jwt.expiresIn },
-      );
-
+      const token = await signSession(reply, user, config.jwt.expiresIn);
       return reply.code(200).send({ token });
     },
   );
@@ -282,9 +313,8 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
   );
 
-  // Complete a password reset using the emailed token.
-  // Note: JWTs are stateless, so any already-issued session token stays valid
-  // until it expires — full session revocation is a later-phase concern.
+  // Complete a password reset using the emailed token. Bumps the user's
+  // token_version, which revokes every session issued before the reset.
   fastify.post<{ Body: { token: string; password: string } }>(
     '/auth/reset-password',
     {
@@ -317,10 +347,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       }
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      await updateUserPassword(resetToken.userId, passwordHash);
+      const user = await updateUserPassword(resetToken.userId, passwordHash);
       await markResetTokenUsed(resetToken.id);
-      // Clear any lockout so the user can sign in immediately with the new password.
-      await clearLoginFailures(resetToken.userId);
+      // Clear lockouts from every IP so the user can sign in immediately.
+      await clearAllLoginFailures(user.email);
 
       return reply.code(200).send({ ok: true });
     },
@@ -348,6 +378,9 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       // Fetch primary verified email (profile.email may be null for private accounts)
       let email = `${profile.login}@github.noreply`;
+      // The synthetic noreply address and any unverified fallback are not
+      // proven mailboxes, so those accounts must verify with us first.
+      let emailVerified = false;
       const emailsResp = await fetch('https://api.github.com/user/emails', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -357,7 +390,9 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       if (emailsResp.ok) {
         const emails = await emailsResp.json() as GitHubEmail[];
         const primary = emails.find(e => e.primary && e.verified);
-        email = primary?.email ?? emails[0]?.email ?? email;
+        const chosen = primary ?? emails[0];
+        email = chosen?.email ?? email;
+        emailVerified = chosen?.verified === true;
       }
 
       const user = await upsertUser({
@@ -366,12 +401,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         avatarUrl:   profile.avatar_url,
         provider:    'github',
         providerId:  String(profile.id),
+        emailVerified,
       });
 
-      const token = await reply.jwtSign(
-        { userId: user.id, email: user.email, displayName: user.displayName },
-        { expiresIn: config.jwt.expiresIn },
-      );
+      const token = await signSession(reply, user, config.jwt.expiresIn);
 
       return reply.redirect(`${config.frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {

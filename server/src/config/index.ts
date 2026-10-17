@@ -124,6 +124,10 @@ export interface Config {
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
+  /** Reverse-proxy hops to trust for X-Forwarded-For (0 = trust none).
+   *  Production sits behind Caddy, so without this every request appears to
+   *  come from the proxy and per-IP limits/lockouts collapse into one bucket. */
+  readonly trustProxyHops: number;
 }
 
 /**
@@ -177,7 +181,7 @@ export function buildConfig(): Config {
     },
     jwt: {
       secret:    jwtSecret,
-      expiresIn: optionalEnv('JWT_EXPIRES_IN', '7d'),
+      expiresIn: optionalEnv('JWT_EXPIRES_IN', '1d'),
     },
     email: {
       smtpUrl:     optionalEnv('SMTP_URL', 'log'),
@@ -228,7 +232,17 @@ export function buildConfig(): Config {
         'OPENAI_ENRICHMENT_TIMEOUT_MS', optionalEnv('OPENAI_ENRICHMENT_TIMEOUT_MS', '8000'),
       ),
     },
+    trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
   };
+}
+
+function parseNonNegativeInt(key: string, raw: string): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    console.error(`FATAL: env var ${key} must be a non-negative integer (got "${raw}")`);
+    process.exit(1);
+  }
+  return n;
 }
 
 function parseFederationMode(raw: string): FederationConfig['mode'] {

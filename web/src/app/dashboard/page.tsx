@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { ApiError, getMe } from "@/lib/nanda-api";
 import { clearAuthToken } from "@/lib/auth";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -71,6 +72,8 @@ export default function DashboardPage() {
       description={`Signed in as ${user.email}`}
     >
       <div className="space-y-6">
+        {!user.email_verified && <VerifyEmailBanner email={user.email} />}
+
         {/* Profile card */}
         <div className={`${cardClass} flex items-center justify-between p-6`}>
           <div>

@@ -146,6 +146,8 @@ export interface ResolveResponse {
 export interface User {
   user_id: string;
   email: string;
+  /** False until the account email is confirmed; org writes are blocked until then. */
+  email_verified: boolean;
   display_name: string | null;
   avatar_url: string | null;
   orgs: OrgMembership[];

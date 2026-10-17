@@ -14,10 +14,12 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
       response: {
         200: {
           type: 'object',
-          required: ['user_id', 'email', 'orgs'],
+          required: ['user_id', 'email', 'email_verified', 'orgs'],
           properties: {
             user_id:      { type: 'string' },
             email:        { type: 'string' },
+            // Account email ownership — the web app prompts to verify when false.
+            email_verified: { type: 'boolean' },
             display_name: { type: ['string', 'null'] },
             avatar_url:   { type: ['string', 'null'] },
             orgs: {
@@ -54,6 +56,7 @@ export async function registerMeRoute(fastify: FastifyInstance): Promise<void> {
     return reply.send({
       user_id:      user.id,
       email:        user.email,
+      email_verified: user.emailVerified,
       display_name: user.displayName,
       avatar_url:   user.avatarUrl,
       orgs: memberships.map(m => ({

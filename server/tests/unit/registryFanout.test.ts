@@ -227,6 +227,20 @@ describe('fanOutAgentSearch', () => {
     expect(result.unreachable).toEqual(['ssrf']);
   });
 
+  it('fetches through the guard-returned fetch (pinned to the checked addresses), never the global one', async () => {
+    const org = makeOrg({ orgId: 'pinned', mediaType: 'application/ai-catalog+json', registryUrl: 'https://pinned.example.com' });
+    const globalFetch = vi.fn();
+    vi.stubGlobal('fetch', globalFetch);
+    const pinned = vi.fn(async () => new Response(JSON.stringify({ specVersion: '1.0', entries: [] }), { status: 200 }));
+    const guard = vi.fn(async () => pinned);
+
+    const result = await fanOutAgentSearch([org], 'query', { urlGuard: guard });
+
+    expect(pinned).toHaveBeenCalledWith('https://pinned.example.com/agents/search?q=query', expect.objectContaining({ redirect: 'error' }));
+    expect(globalFetch).not.toHaveBeenCalled();
+    expect(result.unreachable).toEqual([]);
+  });
+
   it('refuses redirects, so a public registry cannot bounce the server to an internal host', async () => {
     const org = makeOrg({ orgId: 'redir', mediaType: 'application/ai-catalog+json', registryUrl: 'https://redir.example.com' });
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ specVersion: '1.0', entries: [] }), { status: 200 }));

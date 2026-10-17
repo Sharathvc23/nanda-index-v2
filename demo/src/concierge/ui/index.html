@@ -686,7 +686,11 @@ function exchange(s) {
   switch (s.step) {
     case 'discover.organisation':
       asked.push(['Search for', `“${q.query}”`]);
-      for (const m of (a.matches || []).slice(0, 1)) { got.push(['Identifier', m.urn || '—'], ['Catalog at', m.url]); }
+      // The match followed is the one from the expected server, not the first hit.
+      // Older chains have no `chosen`, and for those the first match was followed.
+      { const m = 'chosen' in a ? a.chosen : (a.matches || [])[0];
+        if (m) got.push(['Identifier', m.urn || '—'], ['Catalog at', m.url]);
+        else if (a.matches && a.matches.length) got.push(['Matches', `${a.matches.length}, none from the expected server — not followed`]); }
       if (a.matches && !a.matches.length) got.push(['Matches', 'none']);
       break;
     case 'discover.catalog':

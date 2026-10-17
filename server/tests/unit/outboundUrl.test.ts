@@ -1,5 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { assertPublicHttpUrl, OutboundUrlError, type HostLookup } from '../../src/lib/outboundUrl.js';
+import { describe, it, expect, vi } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import {
+  assertPublicHttpUrl,
+  OutboundUrlError,
+  pinnedFetch,
+  pinnedLookup,
+  publicUrlGuardWith,
+  resolvePublicHttpUrl,
+  type HostLookup,
+} from '../../src/lib/outboundUrl.js';
 
 /** Resolves every hostname to the given addresses — no real DNS in tests. */
 const resolvesTo = (...addresses: string[]): HostLookup => async () => addresses;
@@ -47,5 +57,60 @@ describe('assertPublicHttpUrl', () => {
   it('refuses a hostname that does not resolve', async () => {
     const lookup: HostLookup = async () => { throw new Error('ENOTFOUND'); };
     await expect(assertPublicHttpUrl('https://nope.invalid', lookup)).rejects.toBeInstanceOf(OutboundUrlError);
+  });
+});
+
+describe('pinned outbound fetch (DNS-rebinding defence)', () => {
+  it('resolves the host once and pins the connection to the validated address — a rebound answer is never used', async () => {
+    // First answer is public (passes the guard); a rebinding DNS server would
+    // hand fetch's own resolution a private address the second time.
+    const lookup = vi.fn<HostLookup>()
+      .mockResolvedValueOnce(['93.184.216.34'])
+      .mockResolvedValue(['127.0.0.1']);
+
+    const addresses = await resolvePublicHttpUrl('https://rebind.example.com/agents', lookup);
+    const connectLookup = pinnedLookup(addresses);
+    const all = await new Promise<unknown>((resolve, reject) =>
+      connectLookup('rebind.example.com', { all: true }, (err, result) => (err ? reject(err) : resolve(result))));
+    const single = await new Promise<unknown>((resolve, reject) =>
+      connectLookup('rebind.example.com', {}, (err, address) => (err ? reject(err) : resolve(address))));
+
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(all).toEqual([{ address: '93.184.216.34', family: 4 }]);
+    expect(single).toBe('93.184.216.34');
+  });
+
+  it('honours a requested address family, failing rather than falling back to real DNS', async () => {
+    const connectLookup = pinnedLookup(['93.184.216.34']);
+    const err = await new Promise<NodeJS.ErrnoException | null>((resolve) =>
+      connectLookup('v6only.example.com', { family: 6 }, (e) => resolve(e)));
+    expect(err?.code).toBe('ENOTFOUND');
+  });
+
+  it('connects to the pinned address without resolving the hostname again', async () => {
+    // The server listens on loopback; the hostname has no DNS at all, so the
+    // request can only succeed if the connection uses the pinned address.
+    const server = createServer((_req, res) => res.end('{"ok":true}'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      const res = await pinnedFetch(['127.0.0.1'])(`http://no-dns.invalid:${port}/`, { redirect: 'error' });
+      expect(res.ok).toBe(true);
+      expect(await res.json()).toEqual({ ok: true });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('publicUrlGuardWith refuses before any request when the host resolves privately', async () => {
+    const guard = publicUrlGuardWith(resolvesTo('10.0.0.7'));
+    await expect(guard('https://evil.example.com/agents')).rejects.toBeInstanceOf(OutboundUrlError);
+  });
+
+  it('publicUrlGuardWith returns a fetch pinned to the addresses it validated, resolving only once', async () => {
+    const lookup = vi.fn<HostLookup>().mockResolvedValue(['93.184.216.34']);
+    const guarded = await publicUrlGuardWith(lookup)('https://ok.example.com/agents');
+    expect(typeof guarded).toBe('function');
+    expect(lookup).toHaveBeenCalledTimes(1);
   });
 });

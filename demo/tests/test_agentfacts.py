@@ -114,3 +114,48 @@ def test_skills_are_normalised_however_the_facts_were_built():
 def test_facts_serialise_for_the_page(monkeypatch):
     facts = Facts(url="https://a.test/agentfacts.json", did="did:key:zA", label="A", skills=("x",))
     assert json.loads(json.dumps(facts.to_dict()))["skills"] == ["x"]
+
+
+def test_a_card_address_pointing_inside_is_refused_before_any_request(monkeypatch):
+    """Card addresses come from a catalog the organisation wrote, so they get the
+    same guard as every other registrant-supplied address."""
+    from concierge import discovery
+
+    def must_not_run(*_a, **_k):
+        raise AssertionError("no request may be sent to a refused address")
+
+    monkeypatch.setattr(discovery, "_resolve", lambda _host: ["10.0.0.5"])
+    monkeypatch.setattr(discovery, "_open", must_not_run)
+    with pytest.raises(AgentFactsError, match="UnsafeUrlError"):
+        facts_for("https://card.test/.well-known/agent.json")
+
+
+def test_the_guarded_fetch_is_the_one_used(monkeypatch):
+    from concierge import discovery
+
+    monkeypatch.setattr(discovery, "_resolve", lambda _host: ["93.184.216.34"])
+    seen: list[str] = []
+
+    class _Resp:
+        def __init__(self, body: dict) -> None:
+            self._body = json.dumps(body).encode()
+
+        def read(self, _n=None):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def opener(request, *, timeout, addresses):
+        seen.append(request.full_url)
+        if request.full_url.endswith("agent.json"):
+            return _Resp({"url": "https://agent.test"})
+        return _Resp({"id": "did:key:zA", "capabilities": {}})
+
+    monkeypatch.setattr(discovery, "_open", opener)
+    facts = facts_for("https://card.test/agent.json")
+    assert facts.did == "did:key:zA"
+    assert seen == ["https://card.test/agent.json", "https://agent.test/agentfacts.json"]

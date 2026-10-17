@@ -1,4 +1,13 @@
+# HSTS on both hosts: everything here (Next, /demo, /paper.pdf, the API) is
+# https-only, so browsers should never try plain http again. Set in Caddy
+# rather than the apps so it also covers routes Next never serves.
+(hsts) {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+}
+
 nandaindex.org {
+	import hsts
+
 	handle /paper.pdf {
 		root * /srv/static
 		file_server
@@ -24,5 +33,6 @@ nandaindex.org {
 }
 
 api.nandaindex.org {
+	import hsts
 	reverse_proxy server:3001
 }

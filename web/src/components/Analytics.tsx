@@ -15,7 +15,7 @@ import { onAnalyticsConsentChange, useAnalyticsConsent } from "@/lib/consent";
  * that carry secrets in their URL don't load it at all.
  */
 
-const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email"];
+const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email", "/verify-account"];
 
 function isPrivatePath(pathname: string): boolean {
   return PRIVATE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));

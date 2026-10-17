@@ -583,14 +583,6 @@ export default function NewOrgPage() {
               </>
             )}
 
-            {isAgentPointer && (
-              <Field label="Agent ID" value={form.agent_id}
-                onChange={(v) => patch("agent_id", v)} onBlur={() => touch("agent_id")}
-                placeholder="orders"
-                hint={`Identifier short-name: urn:air:${form.domain || "<domain>"}:agent:<id>. Defaults to your Org ID.`}
-                info={ORG_FIELD_HELP.agent_id} error={visible("agent_id")} optional />
-            )}
-
             {/* SMB + Personal paths */}
             {isAgentCard && (
               <>
@@ -612,40 +604,51 @@ export default function NewOrgPage() {
                   }
                   hint="The URL of your A2A Agent Card."
                   info={ORG_FIELD_HELP.agent_card_url} error={visible("registry_url")} />
-
-                {/* Runtime info */}
-                <div className="space-y-3 border-t border-black/5 pt-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Runtime & auth <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span></p>
-
-                  <div>
-                    <FieldLabel htmlFor="runtime-provider" label="Runtime provider"
-                      info={ORG_FIELD_HELP.runtime_provider} optional />
-                    <select id="runtime-provider" value={form.runtime_provider} onChange={(e) => patch("runtime_provider", e.target.value)}
-                      className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
-                      <option value="">— not specified —</option>
-                      {RUNTIME_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-
-                  <Field label="Runtime URL" value={form.runtime_url}
-                    onChange={(v) => patch("runtime_url", v)}
-                    placeholder="https://my-agent.aws.example.com"
-                    hint="The endpoint where your agent runtime is hosted."
-                    info={ORG_FIELD_HELP.runtime_url} optional />
-
-                  <Field label="Auth metadata" value={form.auth_metadata}
-                    onChange={(v) => patch("auth_metadata", v)}
-                    placeholder="public"
-                    hint='Describes what metadata is public. E.g. "public", "public_minimal".'
-                    info={ORG_FIELD_HELP.auth_metadata} optional />
-
-                  <Field label="Auth execution" value={form.auth_execution}
-                    onChange={(v) => patch("auth_execution", v)}
-                    placeholder="payment_or_session_token_required"
-                    hint='What callers need to invoke this agent. E.g. "user_consent_required".'
-                    info={ORG_FIELD_HELP.auth_execution} optional />
-                </div>
               </>
+            )}
+
+            {/* After each path's notice and card URL, so SMB and DNS SVCB read the same way. */}
+            {isAgentPointer && (
+              <Field label="Agent ID" value={form.agent_id}
+                onChange={(v) => patch("agent_id", v)} onBlur={() => touch("agent_id")}
+                placeholder="orders"
+                hint={`Identifier short-name: urn:air:${form.domain || "<domain>"}:agent:<id>. Defaults to your Org ID.`}
+                info={ORG_FIELD_HELP.agent_id} error={visible("agent_id")} optional />
+            )}
+
+            {/* Runtime info — SMB + Personal */}
+            {isAgentCard && (
+              <div className="space-y-3 border-t border-black/5 pt-3">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Runtime & auth <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span></p>
+
+                <div>
+                  <FieldLabel htmlFor="runtime-provider" label="Runtime provider"
+                    info={ORG_FIELD_HELP.runtime_provider} optional />
+                  <select id="runtime-provider" value={form.runtime_provider} onChange={(e) => patch("runtime_provider", e.target.value)}
+                    className="w-full rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:ring-slate-300">
+                    <option value="">— not specified —</option>
+                    {RUNTIME_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <Field label="Runtime URL" value={form.runtime_url}
+                  onChange={(v) => patch("runtime_url", v)}
+                  placeholder="https://my-agent.aws.example.com"
+                  hint="The endpoint where your agent runtime is hosted."
+                  info={ORG_FIELD_HELP.runtime_url} optional />
+
+                <Field label="Auth metadata" value={form.auth_metadata}
+                  onChange={(v) => patch("auth_metadata", v)}
+                  placeholder="public"
+                  hint='Describes what metadata is public. E.g. "public", "public_minimal".'
+                  info={ORG_FIELD_HELP.auth_metadata} optional />
+
+                <Field label="Auth execution" value={form.auth_execution}
+                  onChange={(v) => patch("auth_execution", v)}
+                  placeholder="payment_or_session_token_required"
+                  hint='What callers need to invoke this agent. E.g. "user_consent_required".'
+                  info={ORG_FIELD_HELP.auth_execution} optional />
+              </div>
             )}
 
             <Field label="Description" value={form.description} onChange={(v) => patch("description", v)}
@@ -742,8 +745,14 @@ export default function NewOrgPage() {
                   ...(form.registry_url
                     ? [{ label: form.hosting_path === "registry" ? "Catalog URL" : "Agent Card URL", value: form.registry_url }]
                     : []),
+                  // Runtime & auth are only submitted on the agent-card paths, so only shown there.
+                  ...(isAgentCard && form.runtime_provider ? [{ label: "Runtime Provider", value: form.runtime_provider }] : []),
+                  ...(isAgentCard && form.runtime_url ? [{ label: "Runtime URL", value: form.runtime_url }] : []),
+                  ...(isAgentCard && form.auth_metadata ? [{ label: "Auth Metadata", value: form.auth_metadata }] : []),
+                  ...(isAgentCard && form.auth_execution ? [{ label: "Auth Execution", value: form.auth_execution }] : []),
                   ...(form.description ? [{ label: "Description", value: form.description }] : []),
                   ...(form.tags ? [{ label: "Tags", value: form.tags }] : []),
+                  ...(form.version ? [{ label: "Version", value: form.version }] : []),
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between gap-4 py-2.5">
                     <dt className="shrink-0 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">{label}</dt>

@@ -305,6 +305,7 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST`   | `/api/v1/orgs` | Register a new organization |
+| `GET`    | `/api/v1/availability?org_id=&domain=` | Whether an `org_id` and/or domain is still free to register (`{ org_id_available, domain_available }`); used by the registration form's first step. Mirrors registration: a domain is taken only once a verified entry holds it; an `org_id` is taken unless its holder is an abandoned unverified claim; reserved `org_id`s are unavailable |
 | `GET`    | `/api/v1/orgs/:org_id` | Get your own org |
 | `PUT`    | `/api/v1/orgs/:org_id` | Update org fields |
 | `DELETE` | `/api/v1/orgs/:org_id` | Permanently delete |

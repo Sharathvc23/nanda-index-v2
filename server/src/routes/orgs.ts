@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, isProven, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -19,6 +19,7 @@ import { isFqdn, PERSONAL_CARD_HOST } from '../lib/airUrn.js';
 import { oversizedJsonField } from '../lib/jsonLimits.js';
 import { isReservedOrgId } from '../lib/reservedOrgIds.js';
 import { isOperator } from '../services/operators.js';
+import { isAbandonedClaim } from '../services/claims.js';
 import {
   ALLOWED_MEDIA_TYPES,
   HOSTING_PATHS,
@@ -209,19 +210,6 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
     return validationError('registry_url must start with https://');
   }
   return null;
-}
-
-/**
- * An unproven org that has held its org_id slug longer than the hold period
- * gives the slug up. Suspending it does not extend the hold: an unproven claim
- * is never published, so keeping it only serves to block someone else.
- */
-function isAbandonedClaim(org: Organization, now: Date = new Date()): boolean {
-  // An org that ever proved ownership is a real org that may have lost its
-  // proof (e.g. a domain change awaiting re-verification) — never auto-deleted.
-  if (org.everProven || isProven(org)) return false;
-  const holdMs = buildConfig().claims.unprovenSlugHoldHours * 60 * 60 * 1000;
-  return now.getTime() - org.createdAt.getTime() >= holdMs;
 }
 
 /**

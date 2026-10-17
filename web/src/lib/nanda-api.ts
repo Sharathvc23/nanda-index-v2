@@ -10,6 +10,7 @@ import type {
   CreateOrgPayload,
   UpdateOrgPayload,
   DomainChallenge,
+  Availability,
 } from "./nanda-types";
 
 const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
@@ -240,6 +241,14 @@ export async function createOrg(payload: CreateOrgPayload): Promise<IndexRecord>
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/** GET /api/v1/availability — whether an org_id and/or domain is still free (requires auth). */
+export async function checkAvailability(query: { org_id?: string; domain?: string }): Promise<Availability> {
+  const params = new URLSearchParams(
+    Object.entries(query).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  return request<Availability>(`/api/v1/availability?${params}`);
 }
 
 /** PUT /api/v1/orgs/:org_id — update an org (requires auth). */

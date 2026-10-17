@@ -415,11 +415,17 @@ export async function markEmailVerifiedByToken(token: string): Promise<Organizat
 }
 
 /**
- * Stores (or replaces) the pending DNS TXT challenge for an org's domain.
- * Regenerating invalidates any previously issued challenge. Returns null if
+ * Returns the org with its outstanding DNS TXT challenge, storing `challenge`
+ * only when there is none or the previous one has expired. A live challenge is
+ * never rotated: the admin may already have published it at their DNS host,
+ * and replacing it would silently invalidate that record. Returns null if
  * org_id not found.
+ *
+ * The liveness check sits in the UPDATE's WHERE so it is atomic: a concurrent
+ * request blocked on the row lock re-checks it against the winner's row,
+ * matches nothing, and falls through to read the challenge just issued.
  */
-export async function setDomainChallenge(
+export async function issueDomainChallenge(
   orgId: string,
   challenge: string,
   expiresAt: Date,
@@ -431,9 +437,12 @@ export async function setDomainChallenge(
       domain_challenge_expires_at = ${expiresAt},
       updated_at                  = NOW()
     WHERE org_id = ${orgId}
+      AND (domain_challenge IS NULL
+           OR domain_challenge_expires_at IS NULL
+           OR domain_challenge_expires_at <= NOW())
     RETURNING *
   `;
-  return rows[0] ?? null;
+  return rows[0] ?? findByOrgId(orgId);
 }
 
 /**

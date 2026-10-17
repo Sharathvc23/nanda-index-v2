@@ -31,19 +31,20 @@ export const architectureLayers = [
   {
     layer: "Enterprise",
     function: "Exposes agents via AI Catalog, DNS-based service discovery (SVCB), or gateways",
-    analogy: "urn:air:example.com:catalog:root",
+    analogy: "urn:air:regentix.ai:catalog:root",
     hosted: "Optional: fallback and federation",
   },
   {
     layer: "SMB",
     function: "Agent runtime on AWS/GCP; agent card hosted by a third party",
-    analogy: "urn:air:moonbakery.com:agent:orders",
+    analogy: "urn:air:moonbakery39.com:agent:orders",
     hosted: "Primary resolver via NandaIndex",
   },
   {
     layer: "Individual",
     function: "No domain needed; identifier anchored to the card host, email as subject account",
-    analogy: "urn:air:host39.org:personal:john@hotmail.com",
+    // Illustrative: real personal entries carry a real person's email.
+    analogy: "urn:air:host39.org:personal:john@hotmail.com (illustrative)",
     hosted: "Primary resolver via NandaIndex",
   },
 ];

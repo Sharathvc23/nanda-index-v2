@@ -232,7 +232,7 @@ export default function ResolvePage() {
         <input
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
-          placeholder="urn:air:acme.com:agent:time"
+          placeholder="urn:air:regentix.ai:agent:regentix-ceo"
           className="flex-1 rounded-2xl border border-black/10 bg-white px-5 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-slate-300"
         />
         <button
@@ -327,7 +327,7 @@ export default function ResolvePage() {
             Enter a URN above to trace the resolution hops.
           </p>
           <p className="mt-2 font-mono text-xs text-slate-300">
-            e.g. urn:air:acme.com:agent:time
+            e.g. urn:air:regentix.ai:agent:regentix-ceo
           </p>
         </div>
       )}

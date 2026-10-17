@@ -144,10 +144,10 @@ export default function QueryPage() {
     isUrn
       ? "URN detected. Will resolve via NANDA Index"
       : mode === "org_id"
-        ? "moonbakery39"
+        ? "moon-bakery"
         : mode === "agentic"
           ? "Help me place an order for a custom cake"
-          : "moonbakery  or  urn:air:moonbakery.com:agent:orders";
+          : "bakery  or  urn:air:moonbakery39.com:agent:orders";
 
   return (
     <PageShell
@@ -343,7 +343,7 @@ export default function QueryPage() {
         {!result && !error && (
           <TableEmptyState
             title="No query yet"
-            description='Try keyword, or a full URN like "urn:air:moonbakery.com:agent:orders".'
+            description='Try keyword, or a full URN like "urn:air:moonbakery39.com:agent:orders".'
           />
         )}
       </div>

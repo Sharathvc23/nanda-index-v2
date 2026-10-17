@@ -224,6 +224,21 @@ export async function getOrgAsOwner(orgId: string): Promise<IndexRecord> {
   return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}`);
 }
 
+/** POST /api/v1/verify-email — confirm a contact email with the emailed token. */
+export async function verifyEmail(token: string): Promise<IndexRecord> {
+  return request<IndexRecord>("/api/v1/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** POST /api/v1/orgs/:org_id/resend-verification — email a new verification link (admin). */
+export async function resendVerification(orgId: string): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>(`/api/v1/orgs/${encodeURIComponent(orgId)}/resend-verification`, {
+    method: "POST",
+  });
+}
+
 /** POST /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin). */
 export async function requestDomainChallenge(orgId: string): Promise<DomainChallenge> {
   return request<DomainChallenge>(`/api/v1/orgs/${encodeURIComponent(orgId)}/domain-challenge`, {

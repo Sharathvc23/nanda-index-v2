@@ -7,7 +7,10 @@ export async function sendVerificationEmail(
   orgId: string,
 ): Promise<void> {
   const config = buildConfig();
-  const verifyUrl = `${config.oauth.callbackBaseUrl}/api/v1/verify-email?token=${token}`;
+  // A web page, not the API: mail scanners open links before the recipient
+  // does, so verification happens on an explicit button press there (POST),
+  // never on the link being fetched.
+  const verifyUrl = `${config.frontendUrl}/verify-email?token=${token}`;
 
   if (config.email.smtpUrl === 'log') {
     console.log(`[email] verification link for org "${orgId}" → ${verifyUrl}`);

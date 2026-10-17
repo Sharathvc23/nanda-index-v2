@@ -415,6 +415,34 @@ export async function markEmailVerifiedByToken(token: string): Promise<Organizat
 }
 
 /**
+ * Issues a fresh email verification token for an org whose email is not yet
+ * verified (the previous link stops working). Refused while the previous link
+ * was issued less than `cooldownMs` ago, so resend cannot flood an inbox.
+ * Returns null if org_id not found, the email is verified, or in cooldown.
+ */
+export async function renewVerifyToken(
+  orgId: string,
+  token: string,
+  expiresAt: Date,
+  cooldownMs: number,
+): Promise<Organization | null> {
+  const sql = getSql();
+  // Tokens share one TTL, so "previous link issued within the cooldown" is
+  // "previous expiry later than this one's minus the cooldown".
+  const latestPreviousExpiry = new Date(expiresAt.getTime() - cooldownMs);
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET
+      verify_token            = ${token},
+      verify_token_expires_at = ${expiresAt},
+      updated_at              = NOW()
+    WHERE org_id = ${orgId} AND NOT email_verified
+      AND (verify_token_expires_at IS NULL OR verify_token_expires_at <= ${latestPreviousExpiry})
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
  * Returns the org with its outstanding DNS TXT challenge, storing `challenge`
  * only when there is none or the previous one has expired. A live challenge is
  * never rotated: the admin may already have published it at their DNS host,

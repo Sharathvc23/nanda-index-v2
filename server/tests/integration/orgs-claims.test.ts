@@ -66,7 +66,7 @@ describe('Org claims — proof before publication, no squatting', () => {
   const verifyEmail = async (orgId: string) => {
     // The client maps columns to camelCase.
     const rows = await getSql()<{ verifyToken: string }[]>`SELECT verify_token FROM organizations WHERE org_id = ${orgId}`;
-    return fastify.inject({ method: 'GET', url: `/api/v1/verify-email?token=${rows[0]!.verifyToken}` });
+    return fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: { token: rows[0]!.verifyToken } });
   };
   const proveDomain = async (who: string, orgId: string) => {
     const chal = (await post(who, `/api/v1/orgs/${orgId}/domain-challenge`)).json();

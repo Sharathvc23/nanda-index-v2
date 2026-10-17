@@ -141,7 +141,7 @@ describe('NANDA Index — public read routes', () => {
     expect(res.json()).toEqual({ error: 'NOT_FOUND', detail: `org "idx-${status}" not found` });
   });
 
-  // ── GET /api/v1/verify-email ────────────────────────────────────────────────
+  // ── POST /api/v1/verify-email ───────────────────────────────────────────────
 
   it('marks email verified via valid token but does NOT activate (domain gate)', async () => {
     const token = randomBytes(16).toString('hex');
@@ -152,8 +152,9 @@ describe('NANDA Index — public read routes', () => {
     });
 
     const res = await fastify.inject({
-      method: 'GET',
-      url: `/api/v1/verify-email?token=${token}`,
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().email_verified).toBe(true);
@@ -171,8 +172,9 @@ describe('NANDA Index — public read routes', () => {
     });
 
     const res = await fastify.inject({
-      method: 'GET',
-      url: `/api/v1/verify-email?token=${token}`,
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().email_verified).toBe(true);
@@ -181,15 +183,16 @@ describe('NANDA Index — public read routes', () => {
     expect(res.json().domain).toBe(null);
   });
 
-  it('returns 400 when token query param is missing', async () => {
-    const res = await fastify.inject({ method: 'GET', url: '/api/v1/verify-email' });
+  it('returns 400 when the token is missing', async () => {
+    const res = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: {} });
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 404 for invalid verify token', async () => {
     const res = await fastify.inject({
-      method: 'GET',
-      url: '/api/v1/verify-email?token=totally-invalid-token-xyz',
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token: 'totally-invalid-token-xyz' },
     });
     expect(res.statusCode).toBe(404);
   });

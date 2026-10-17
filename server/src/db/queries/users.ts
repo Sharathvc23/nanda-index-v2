@@ -60,7 +60,7 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
   const sql = getSql();
   const rows = await sql<User[]>`
     INSERT INTO users (email, display_name, avatar_url, provider, provider_id)
-    VALUES (${params.email}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId})
+    VALUES (${normalizeEmail(params.email)}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId})
     ON CONFLICT (provider, provider_id)
       DO UPDATE SET
         email        = EXCLUDED.email,
@@ -79,9 +79,16 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
 export async function findUserByEmail(email: string): Promise<User | null> {
   const sql = getSql();
   const rows = await sql<User[]>`
-    SELECT * FROM users WHERE email = ${email} LIMIT 1
+    SELECT * FROM users WHERE lower(email) = ${normalizeEmail(email)}
+    ORDER BY created_at ASC  -- deterministic if legacy case-only duplicates exist (see migration 015)
+    LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+/** Email addresses are compared and stored trimmed and lowercased (migration 015). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 /**
@@ -95,9 +102,10 @@ export async function createUserWithPassword(
   displayName: string | null,
 ): Promise<User> {
   const sql = getSql();
+  const normalized = normalizeEmail(email);
   const rows = await sql<User[]>`
     INSERT INTO users (email, display_name, provider, provider_id, password_hash)
-    VALUES (${email}, ${displayName}, 'email', ${email}, ${passwordHash})
+    VALUES (${normalized}, ${displayName}, 'email', ${normalized}, ${passwordHash})
     RETURNING *
   `;
   return rows[0]!;

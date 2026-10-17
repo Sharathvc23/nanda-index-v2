@@ -44,6 +44,12 @@ function apiErrorCode(err: unknown): string | null {
   return typeof payload?.error === "string" ? payload.error : null;
 }
 
+/** The record name relative to the zone — what a provider's "Host" field expects. */
+function hostLabel(recordName: string, domain: string): string {
+  const suffix = `.${domain}`;
+  return recordName.endsWith(suffix) ? recordName.slice(0, -suffix.length) : recordName;
+}
+
 /**
  * Proves ownership of an org's domain via a DNS TXT challenge.
  *
@@ -156,9 +162,15 @@ export function DomainVerification({
           </p>
           <div className="space-y-2">
             <CopyRow label="Type" value={challenge.record_type} />
-            <CopyRow label="Name / Host" value={challenge.record_name} />
+            <CopyRow label="Name" value={challenge.record_name} />
+            <CopyRow label="Host" value={hostLabel(challenge.record_name, challenge.domain)} />
             <CopyRow label="Value" value={challenge.record_value} />
           </div>
+          <p className="text-[11px] text-amber-700">
+            Most DNS providers (Namecheap, GoDaddy, Cloudflare…) add your domain automatically — enter
+            only the <span className="font-semibold">Host</span> value, or the record ends up at{" "}
+            <span className="font-mono">{challenge.record_name}.{challenge.domain}</span>.
+          </p>
           <p className="text-[11px] text-amber-600">
             This record stays the same until {new Date(challenge.expires_at).toLocaleString()} —
             you can leave and come back to check.

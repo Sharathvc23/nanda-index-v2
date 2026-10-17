@@ -13,7 +13,7 @@ function apiOrigin(): string | null {
   }
 }
 
-// Google Analytics 4 via @next/third-parties: gtag.js comes from
+// Google Analytics 4 (components/Analytics.tsx, after consent): gtag.js comes from
 // googletagmanager.com and beacons go to the regional GA collectors.
 const GA_SCRIPT = "https://www.googletagmanager.com";
 const GA_COLLECT = ["https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.googletagmanager.com"];

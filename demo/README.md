@@ -139,7 +139,15 @@ Copy `.env.example` and set what you need.
 - **Signing is versioned.** v0.2 signs `{body}:{agent_id}:{timestamp}`; v0.3
   signs `{METHOD}:{path}:{body}:{agent_id}:{timestamp}:{nonce}` and adds an
   `X-Agent-Nonce` header. The version is not derivable from the URL, so it is an
-  explicit argument at every call site.
+  explicit argument at every call site. The per-agent services and the venue
+  still verify only v0.2, which binds neither method, path nor a nonce, so a
+  captured request replays within the timestamp window; calls to them move to
+  v0.3 once they accept it.
+- **Every registrant-supplied address is guarded.** Search hits, catalog
+  entries, cards and pointers are fetched only over https, only from hosts whose
+  every address is public, on a connection pinned to the addresses checked, and
+  never through a redirect to another host. A search hit is followed only when
+  it points at the organisation server the concierge was configured with.
 - **A signature is accountability, not membership.** It proves possession of a
   key. It does not open an org's member list, so naming an agent inside an
   organisation stays a configured hop for an outsider.

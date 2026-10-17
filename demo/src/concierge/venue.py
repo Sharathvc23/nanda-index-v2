@@ -44,6 +44,9 @@ class Venue:
     @classmethod
     def identified(cls, url: str, *, agent_id: str, private_key: bytes, did: str) -> Venue:
         """Signed as this agent. Requires a live index record for this key."""
+        # v0.2 for the same reason as Peer.open: the venue publishes no v0.3
+        # support, and a signature it cannot verify is a booking refused. Its
+        # hold is idempotent per request, which limits what a replay can do.
         return cls(
             url,
             client=httpx.Client(

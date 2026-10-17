@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from concierge import discovery, lunch
@@ -145,6 +147,107 @@ def test_the_guests_addresses_are_marked_configured_not_discovered(me, wired, gu
     assert ask.request["peer"]["how"] == "configured"
     org = [e for e in plan.chain.entries if e.step == "discover.organisation"][0]
     assert org.answer["matches"][0]["how"] == "searched"
+
+
+def _search_returning(*records: tuple[str, str]):
+    """A search stub answering with ``(org_id, registry_url)`` pairs, in order."""
+
+    def search(_q, **_):
+        return [lunch.Counterparty(label=org, url=url, how="searched") for org, url in records]
+
+    return search
+
+
+def test_a_lookalike_listed_first_is_passed_over_for_the_expected_organisation(me, wired, guests, monkeypatch):
+    """Search orders by org id, so anyone can register ``aaa-regentix`` and sort first.
+
+    Taking the first hit would open the registrant's catalog, follow its card,
+    and send that stranger signed requests from the public demo.
+    """
+    monkeypatch.setattr(
+        lunch,
+        "search_capability",
+        _search_returning(
+            ("aaa-regentix", "https://attacker.test"),
+            ("regentix", "https://regentix.test/"),
+            ("aaa-astrocity", "https://attacker.test"),
+            ("astrocity", "https://astrocity.test"),
+        ),
+    )
+    opened: list[str] = []
+    monkeypatch.setattr(
+        lunch,
+        "org_catalog",
+        lambda url, **_: (
+            opened.append(url) or {"url": url, "entries": [], "visible": 0, "withheld": 0, "omitted": 0}
+        ),
+    )
+
+    plan = arrange(
+        me,
+        guests=guests,
+        venue_url="https://v.test",
+        date="2026-10-02",
+        candidate_starts=["12:00"],
+        resources=["table-4"],
+    )
+
+    assert opened == ["https://regentix.test/", "https://astrocity.test"]
+    org = [e for e in plan.chain.entries if e.step == "discover.organisation"][0]
+    assert org.answer["chosen"]["label"] == "regentix"
+
+
+def test_no_match_from_the_expected_organisation_is_a_recorded_refusal(me, wired, guests, monkeypatch):
+    monkeypatch.setattr(
+        lunch, "search_capability", _search_returning(("aaa-regentix", "https://attacker.test"))
+    )
+    opened: list[str] = []
+    monkeypatch.setattr(lunch, "org_catalog", lambda url, **_: opened.append(url) or {})
+
+    plan = arrange(
+        me,
+        guests=guests,
+        venue_url="https://v.test",
+        date="2026-10-02",
+        candidate_starts=["12:00"],
+        resources=["table-4"],
+    )
+
+    assert opened == [], "a listing from somebody else's server must never be opened"
+    org = [e for e in plan.chain.entries if e.step == "discover.organisation"][0]
+    assert org.answer["chosen"] is None
+    assert org.answer["expected_registry"] == "https://regentix.test"
+    assert "no match from the expected organisation" in org.outcome.lower()
+    # The refusal is a result, not an abort: the run still reaches the venue,
+    # using the configured address it was given and saying so.
+    agent = [e for e in plan.chain.entries if e.step == "discover.agent"][0]
+    assert agent.answer["fell_back_to"] == "https://ceo.test"
+    assert [e.step for e in plan.chain.entries][-1] == "venue.book"
+
+
+def test_a_guest_with_no_expected_server_trusts_no_search_hit(me, wired, guests, monkeypatch):
+    unpinned = dataclasses.replace(guests[0], registry_url="")
+    monkeypatch.setattr(lunch, "search_capability", _search_returning(("regentix", "https://regentix.test")))
+    opened: list[str] = []
+    monkeypatch.setattr(lunch, "org_catalog", lambda url, **_: opened.append(url) or {})
+
+    arrange(
+        me,
+        guests=[unpinned],
+        venue_url="https://v.test",
+        date="2026-10-02",
+        candidate_starts=["12:00"],
+        resources=["table-4"],
+    )
+
+    assert opened == []
+
+
+def test_the_default_guests_expect_the_configured_organisation_servers():
+    from concierge import config
+
+    for guest in config.DEFAULT_GUESTS:
+        assert guest.registry_url == config.ORG_SERVERS[guest.org_query]
 
 
 def test_the_result_notes_are_written_for_a_person_not_a_protocol(me, wired, guests):

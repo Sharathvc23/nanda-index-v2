@@ -72,10 +72,11 @@ async function fetchAgentSearch(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = `${org.registryUrl}/agents/search?q=${encodeURIComponent(query)}`;
-    // registry_url is registrant-controlled: refuse internal hosts, and
-    // refuse redirects so a public host can't bounce us to one.
-    await urlGuard(url);
-    const res = await fetch(url, { signal: controller.signal, redirect: 'error' });
+    // registry_url is registrant-controlled: refuse internal hosts, connect
+    // only to the addresses the guard checked (no DNS rebinding), and refuse
+    // redirects so a public host can't bounce us to an internal one.
+    const guardedFetch = await urlGuard(url);
+    const res = await guardedFetch(url, { signal: controller.signal, redirect: 'error' });
     if (!res.ok) return null;
 
     // The response is the registrant's to shape: read a bounded amount and

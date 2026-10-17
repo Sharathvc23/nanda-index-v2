@@ -17,6 +17,19 @@ __all__ = [
     "venue_url",
 ]
 
+#: The three organisation servers, by the name the index knows them under.
+#: Configured, not discovered: the public index returns a ``registry_url`` only
+#: for a record asked for by name, so every receipt using these says
+#: ``configured``. Read by the reference probes, the capability search and the
+#: scenario, so it is defined once here. The scenario also uses it to decide
+#: which search hit is the company meant: only one pointing at this server.
+ORG_SERVERS: dict[str, str] = {
+    "regentix": os.environ.get("REGENTIX_SERVER_URL", "https://server-production-c4d4.up.railway.app"),
+    "astrocity": os.environ.get("ASTROCITY_SERVER_URL", "https://server-production-9ec7.up.railway.app"),
+    "rocketbrain": os.environ.get("ROCKETBRAIN_SERVER_URL", "https://server-production-c3f5.up.railway.app"),
+}
+
+
 #: The two invitees, one found through each index so the demo shows both routes.
 #:
 #: Regentix's CEO comes from index v2: search the org by name, read its catalog,
@@ -34,6 +47,7 @@ DEFAULT_GUESTS = [
         via=VIA_INDEX_V2,
         capability=os.environ.get("REGENTIX_CAPABILITY", "leadership"),
         agent_url=os.environ.get("REGENTIX_CEO_URL", "https://ceo-production-b906.up.railway.app"),
+        registry_url=ORG_SERVERS["regentix"],
     ),
     Guest(
         who="the chief scientist of AstroCity",
@@ -46,20 +60,9 @@ DEFAULT_GUESTS = [
             "urn:ai:key:ujkaiuq3MALCoJKUeAK8ugnLdi0FNLLC1lBSbG3e9KYE/agent",
         ),
         agent_url=os.environ.get("ASTROCITY_SCIENCE_URL", "https://chief-scientist-production.up.railway.app"),
+        registry_url=ORG_SERVERS["astrocity"],
     ),
 ]
-
-
-#: The three organisation servers, by the name the index knows them under.
-#: Configured, not discovered: the public index returns a ``registry_url`` only
-#: for a record asked for by name, so every receipt using these says
-#: ``configured``. Read by the reference probes, the capability search and the
-#: scenario, so it is defined once here.
-ORG_SERVERS: dict[str, str] = {
-    "regentix": os.environ.get("REGENTIX_SERVER_URL", "https://server-production-c4d4.up.railway.app"),
-    "astrocity": os.environ.get("ASTROCITY_SERVER_URL", "https://server-production-9ec7.up.railway.app"),
-    "rocketbrain": os.environ.get("ROCKETBRAIN_SERVER_URL", "https://server-production-c3f5.up.railway.app"),
-}
 
 
 def host_did() -> str:

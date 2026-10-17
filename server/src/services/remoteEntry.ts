@@ -1,5 +1,6 @@
 import { parseAirUrn } from '../lib/airUrn.js';
 import type { RemoteCatalogEntry } from './registryFanout.js';
+import type { OutboundResponse } from '../lib/outboundUrl.js';
 
 /**
  * Validation for entries returned by a registrant's own registry during
@@ -94,23 +95,18 @@ export function sanitizeRemoteEntry(raw: unknown, orgDomain: string | null): Rem
  * undefined when the body is too large or not JSON, so a registry cannot make
  * the index buffer an arbitrarily large document.
  */
-export async function readCappedJson(res: Response): Promise<unknown> {
+export async function readCappedJson(res: Pick<OutboundResponse, 'headers' | 'body'>): Promise<unknown> {
   const declared = Number(res.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > MAX_REMOTE_BODY_BYTES) return undefined;
   if (!res.body) return undefined;
 
-  const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_REMOTE_BODY_BYTES) {
-      await reader.cancel();
-      return undefined;
-    }
-    chunks.push(value);
+  // Leaving the loop early (return) cancels the underlying stream.
+  for await (const chunk of res.body) {
+    total += chunk.byteLength;
+    if (total > MAX_REMOTE_BODY_BYTES) return undefined;
+    chunks.push(chunk);
   }
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));

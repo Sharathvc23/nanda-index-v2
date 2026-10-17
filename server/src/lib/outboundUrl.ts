@@ -31,6 +31,10 @@ export type HostLookup = (hostname: string) => Promise<string[]>;
 export interface OutboundResponse {
   ok: boolean;
   status: number;
+  /** Used to refuse an oversized body before reading it (remoteEntry.readCappedJson). */
+  headers: { get(name: string): string | null };
+  /** Read incrementally so a remote registry cannot make us buffer an unbounded body. */
+  body: AsyncIterable<Uint8Array> | null;
   json(): Promise<unknown>;
 }
 

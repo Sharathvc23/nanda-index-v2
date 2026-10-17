@@ -52,6 +52,16 @@ services:
       # Write-time representative-query enrichment for search; skipped when unset.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_ENRICHMENT_MODEL: ${OPENAI_ENRICHMENT_MODEL:-gpt-4o-mini}
+      # Index operators (comma-separated, Google/GitHub sign-in only): may
+      # moderate entries via /api/v1/admin/* and register reserved org_ids.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Per-IP limits on public reads; agentic/ARD search fan out, so tighter.
+      PUBLIC_RATE_LIMIT_MAX: ${PUBLIC_RATE_LIMIT_MAX:-120}
+      SEARCH_RATE_LIMIT_MAX: ${SEARCH_RATE_LIMIT_MAX:-30}
+      # Caddy is the only way in (no published port), so trust its one
+      # X-Forwarded-For hop — otherwise every client shares Caddy's IP and
+      # the per-IP limits above become one global limit.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
     depends_on:
       db:
         condition: service_healthy

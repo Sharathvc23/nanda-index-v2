@@ -77,6 +77,14 @@ export interface AuthConfig {
   readonly resetTokenTtlMinutes: number;
 }
 
+export interface PublicRateLimitConfig {
+  /** Per-IP requests per window on cheap public reads (index, search, resolve, ARD listings). */
+  readonly max: number;
+  /** Per-IP requests per window on agentic / ARD search, which fan out to remote registries. */
+  readonly searchMax: number;
+  readonly window: string;
+}
+
 export interface SigningConfig {
   readonly privateKey: string | undefined;
   readonly keyId: string;
@@ -116,6 +124,15 @@ export interface Config {
   readonly email: EmailConfig;
   readonly cookie: CookieConfig;
   readonly auth: AuthConfig;
+  readonly publicRateLimit: PublicRateLimitConfig;
+  /** Lowercased emails of index operators (ADMIN_EMAILS): they may moderate
+   *  any entry and register reserved org_ids. Empty = no operators. */
+  readonly adminEmails: readonly string[];
+  /** Fastify `trustProxy` hop count used to derive the client IP from
+   *  X-Forwarded-For for per-IP rate limits. 0 trusts no proxy. Set it only
+   *  when every request really arrives through that many proxies (in prod,
+   *  Caddy is the only way in), or clients could spoof their IP. */
+  readonly trustProxyHops: number;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
   /** Public base URL this API is reachable at — used to build absolute
@@ -201,6 +218,13 @@ export function buildConfig(): Config {
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
       ),
     },
+    publicRateLimit: {
+      max: parsePositiveInt('PUBLIC_RATE_LIMIT_MAX', optionalEnv('PUBLIC_RATE_LIMIT_MAX', '120')),
+      searchMax: parsePositiveInt('SEARCH_RATE_LIMIT_MAX', optionalEnv('SEARCH_RATE_LIMIT_MAX', '30')),
+      window: optionalEnv('PUBLIC_RATE_LIMIT_WINDOW', '1 minute'),
+    },
+    adminEmails: parseAdminEmails(optionalEnv('ADMIN_EMAILS', '')),
+    trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,
@@ -229,6 +253,23 @@ export function buildConfig(): Config {
       ),
     },
   };
+}
+
+/** Comma-separated ADMIN_EMAILS → trimmed, lowercased, blanks dropped. */
+export function parseAdminEmails(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+}
+
+function parseNonNegativeInt(key: string, raw: string): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    console.error(`FATAL: env var ${key} must be a non-negative integer (got "${raw}")`);
+    process.exit(1);
+  }
+  return n;
 }
 
 function parseFederationMode(raw: string): FederationConfig['mode'] {

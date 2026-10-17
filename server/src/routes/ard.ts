@@ -11,6 +11,7 @@ import {
 } from '../types/api/ard.js';
 import { agenticSearch } from '../services/agenticSearch.js';
 import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
+import { publicReadRateLimit, searchRateLimit } from '../plugins/rateLimit.js';
 import { maybeFederateOut } from '../services/federation.js';
 import { buildDescriptor, agentCandidateToArdResult, finderReferralToArd, organizationToArdResult } from '../services/ardRegistry.js';
 import { NANDA_TO_ARD_TYPE } from '../lib/ardMapping.js';
@@ -73,6 +74,7 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post<{ Body: ArdSearchBody }>('/api/ard/search', {
+    config: searchRateLimit(),
     schema: {
       tags: ['ard'],
       body: ardSearchBodySchema,
@@ -100,6 +102,7 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post<{ Body: ArdExploreBody }>('/api/ard/explore', {
+    config: publicReadRateLimit(),
     schema: {
       tags: ['ard'],
       body: ardExploreBodySchema,
@@ -130,6 +133,7 @@ export async function registerArdRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get<{ Querystring: ArdAgentsQuerystring }>('/api/ard/agents', {
+    config: publicReadRateLimit(),
     schema: {
       tags: ['ard'],
       querystring: ardAgentsQuerySchema,

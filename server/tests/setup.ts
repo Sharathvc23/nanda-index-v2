@@ -15,3 +15,9 @@ try {
 // no real DNS, so the agentic-search SSRF guard is off by default here. Tests
 // that exercise the guard set OUTBOUND_ALLOW_PRIVATE_HOSTS=false explicitly.
 process.env['OUTBOUND_ALLOW_PRIVATE_HOSTS'] ??= 'true';
+
+// Every inject() comes from 127.0.0.1, so suites would share one per-IP
+// budget on the public read routes. Raise it; rate-limit-public.test.ts
+// lowers it explicitly to exercise the 429.
+process.env['PUBLIC_RATE_LIMIT_MAX'] ??= '100000';
+process.env['SEARCH_RATE_LIMIT_MAX'] ??= '100000';

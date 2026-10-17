@@ -16,6 +16,9 @@ import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { TrustManifest } from '../types/api/index-record.js';
 import { isFqdn, PERSONAL_CARD_HOST } from '../lib/airUrn.js';
+import { oversizedJsonField } from '../lib/jsonLimits.js';
+import { isReservedOrgId } from '../lib/reservedOrgIds.js';
+import { isOperator } from '../services/operators.js';
 import {
   ALLOWED_MEDIA_TYPES,
   HOSTING_PATHS,
@@ -84,6 +87,31 @@ async function rejectUnknownUpdateFields(request: FastifyRequest, reply: Fastify
     error: 'UNKNOWN_FIELDS',
     detail: `these fields cannot be changed via PUT: ${unknown.join(', ')}. Editable fields: ${EDITABLE_FIELDS.join(', ')} (publisher: ${EDITABLE_PUBLISHER_FIELDS.join(', ')})`,
   });
+}
+
+/** Free-form client JSON fields capped by size and depth (see lib/jsonLimits.ts). */
+const CAPPED_JSON_FIELDS: readonly string[] = ['extensions', 'entry_data', 'trust_manifest'];
+
+/** preHandler: 400 PAYLOAD_TOO_LARGE when a free-form JSON field is over its cap. */
+async function rejectOversizedJson(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (typeof request.body !== 'object' || request.body === null) return;
+  const problem = oversizedJsonField(request.body as Record<string, unknown>, CAPPED_JSON_FIELDS);
+  if (problem) reply.code(400).send({ error: 'PAYLOAD_TOO_LARGE', detail: problem });
+}
+
+/**
+ * preHandler for owner lifecycle routes (suspend/reactivate): an operator
+ * takedown cannot be undone — or toggled around — by the owner.
+ */
+async function rejectIfTakenDown(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { org_id } = request.params as { org_id: string };
+  const org = await findByOrgId(org_id);
+  if (org?.moderation === 'takedown') {
+    reply.code(403).send({
+      error: 'MODERATED',
+      detail: 'this entry was taken down by an index operator; contact the operators to have it reviewed',
+    });
+  }
 }
 
 /** Wire shape returned when an org admin requests a DNS challenge. */
@@ -284,7 +312,7 @@ function requireOrgRole(level: 'member' | 'admin') {
 export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void> {
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, rejectOversizedJson],
     schema: {
       tags: ['orgs'],
       summary: 'Register a new organization (creates index record)',
@@ -323,6 +351,10 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     const invalid = validateCreateBody(body, path);
     if (invalid) return reply.code(invalid.status).send(invalid.body);
+
+    if (isReservedOrgId(body.org_id) && !(await isOperator(user.userId))) {
+      return reply.code(400).send({ error: 'RESERVED_ORG_ID', detail: `org_id "${body.org_id}" is reserved — choose another` });
+    }
 
     const profile = buildProfileOrError(body, path);
     if ('status' in profile) return reply.code(profile.status).send(profile.body);
@@ -501,7 +533,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectUnknownUpdateFields],
+    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
     schema: {
       tags: ['orgs'],
       summary: 'Update your organization\'s index record',
@@ -592,7 +624,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -618,7 +650,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',

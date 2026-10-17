@@ -13,9 +13,15 @@ export class ResolutionError extends Error {
   }
 }
 
-/** Resolvable only while active and, for domain entries, with domain ownership proven. */
+/**
+ * Resolvable only while active, not taken down by an operator, and, for
+ * domain entries, with domain ownership proven. A 'hidden' entry stays
+ * resolvable: hiding only keeps it out of listings and search.
+ */
 function isLive(org: Organization | null): org is Organization {
-  return org?.status === 'active' && (org.domain === null || org.domainVerified);
+  return org?.status === 'active'
+    && org.moderation !== 'takedown'
+    && (org.domain === null || org.domainVerified);
 }
 
 export interface ResolvedEntry {

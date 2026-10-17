@@ -582,7 +582,10 @@ function TrustManifestPanel({ tm }: { tm: TrustManifest }) {
   const provenance = tm.provenance ?? [];
   return (
     <div className="bg-surface-light rounded-card border border-line p-5 shadow-card">
-      <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-weak">Trust Manifest</h3>
+      <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-weak">Trust Manifest</h3>
+      {/* The API marks every manifest trustManifestVerified: false — it is
+          whatever the registrant submitted, so say so rather than imply vetting. */}
+      <p className="mb-3 text-xs text-ink-weak">Self-asserted by the registrant — not verified by NANDA Index.</p>
       <dl className="grid gap-2 text-sm text-ink">
         <DetailRow label="Identity">
           <span className="font-mono text-xs break-all">{tm.identity}</span>

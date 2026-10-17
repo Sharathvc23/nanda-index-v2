@@ -32,6 +32,7 @@ function makeOrg(overrides: Partial<RankedOrganization>): RankedOrganization {
     version: null,
     trustManifest: null,
     representativeQueries: [],
+    moderation: 'none',
     rank: 1,
     ...overrides,
   };

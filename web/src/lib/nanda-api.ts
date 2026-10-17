@@ -71,9 +71,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return parseApiResponse<T>(res);
 }
 
-/** GET /api/v1/index — list all active entries (AI Catalog entry shape). */
+/** Largest page GET /api/v1/index serves (the server caps ?limit at 500). */
+const INDEX_PAGE_SIZE = 500;
+/** Stop paging after this many pages so a misbehaving server can't loop us forever. */
+const MAX_INDEX_PAGES = 20;
+
+/**
+ * GET /api/v1/index — every listed entry (AI Catalog entry shape). The
+ * endpoint is paged (?limit/&offset), so fetch pages until a short one
+ * comes back; Explore filters and paginates client-side over the full set.
+ */
 export async function listIndexRecords(): Promise<IndexCatalogEntry[]> {
-  return request<IndexCatalogEntry[]>("/api/v1/index");
+  let entries: IndexCatalogEntry[] = [];
+  for (let page = 0; page < MAX_INDEX_PAGES; page++) {
+    const params = new URLSearchParams({ limit: String(INDEX_PAGE_SIZE), offset: String(page * INDEX_PAGE_SIZE) });
+    const batch = await request<IndexCatalogEntry[]>(`/api/v1/index?${params}`);
+    entries = [...entries, ...batch];
+    if (batch.length < INDEX_PAGE_SIZE) break;
+  }
+  return entries;
 }
 
 /** GET /api/v1/index/:org_id — a single entry (AI Catalog entry shape). */

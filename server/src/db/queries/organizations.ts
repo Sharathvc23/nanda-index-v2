@@ -4,7 +4,7 @@ import { CATALOG_MEDIA_TYPES, DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, NANDA_M
 
 /** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
 const TEXT_OID = 25;
-import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
+import type { IndexRecord, Moderation, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
 
@@ -45,6 +45,8 @@ export interface Organization {
    *  "help me bake" vs a "bakery" tag). Empty when enrichment isn't configured
    *  or hasn't run for this org yet. */
   representativeQueries: string[];
+  /** Operator moderation (migration 017) — independent of owner-set status. */
+  moderation: Moderation;
 }
 
 export interface InsertOrgParams {
@@ -111,7 +113,11 @@ export function toIndexRecord(org: Organization): IndexRecord {
     data:           org.entryData ?? undefined,
     version:        org.version ?? undefined,
     trust_manifest: org.trustManifest ?? undefined,
+    // The manifest is whatever the registrant submitted; nothing in it has
+    // been checked, so say so next to it rather than let it read as vetted.
+    ...(org.trustManifest ? { trust_manifest_verified: false } : {}),
     representative_queries: org.representativeQueries.length > 0 ? org.representativeQueries : undefined,
+    moderation:     org.moderation,
   };
 }
 
@@ -131,7 +137,8 @@ export function toIndexEntry(org: Organization): IndexEntry {
     tags:        org.tags,
     ...(org.version ? { version: org.version } : {}),
     ...(org.publisher ? { publisher: org.publisher } : {}),
-    ...(org.trustManifest ? { trustManifest: org.trustManifest } : {}),
+    // Self-asserted by the registrant and not verified by the index.
+    ...(org.trustManifest ? { trustManifest: org.trustManifest, trustManifestVerified: false } : {}),
     updatedAt:   org.updatedAt.toISOString(),
     extensions: {
       ...org.extensions,
@@ -263,16 +270,33 @@ export async function findByUserId(userId: string): Promise<Organization[]> {
   `;
 }
 
+export interface ListedPage {
+  rows: Organization[];
+  /** Listed entries in total, independent of limit/offset. */
+  total: number;
+}
+
 /**
- * Returns all active organizations ordered by creation date.
+ * One page of listed entries — active and not moderated (every listing and
+ * search below applies the same `moderation = 'none'` filter; hidden and
+ * taken-down entries never appear in one). Ordered by creation date, with
+ * org_id as a tie-breaker so offsets page deterministically.
  */
-export async function findAllActive(): Promise<Organization[]> {
+export async function listListedEntries(limit: number, offset: number): Promise<ListedPage> {
   const sql = getSql();
-  return sql<Organization[]>`
-    SELECT * FROM organizations
-    WHERE status = 'active'
-    ORDER BY created_at ASC
-  `;
+  const [rows, counted] = await Promise.all([
+    sql<Organization[]>`
+      SELECT * FROM organizations
+      WHERE status = 'active' AND moderation = 'none'
+      ORDER BY created_at ASC, org_id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `,
+    sql<{ total: string }[]>`
+      SELECT COUNT(*)::text AS total FROM organizations
+      WHERE status = 'active' AND moderation = 'none'
+    `,
+  ]);
+  return { rows, total: Number(counted[0]?.total ?? 0) };
 }
 
 /**
@@ -513,8 +537,9 @@ export async function markDomainVerified(orgId: string): Promise<Organization | 
 }
 
 /**
- * Sets an organization's status to 'suspended'.
- * Returns null if org_id not found.
+ * Sets an organization's status to 'suspended'. A taken-down entry is left
+ * untouched (the route refuses it first; the predicate is the race backstop).
+ * Returns null if org_id not found or taken down.
  */
 export async function suspendOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
@@ -522,7 +547,7 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
     UPDATE organizations SET
       status     = 'suspended',
       updated_at = NOW()
-    WHERE org_id = ${orgId}
+    WHERE org_id = ${orgId} AND moderation <> 'takedown'
     RETURNING *
   `;
   return rows[0] ?? null;
@@ -533,8 +558,9 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
  * ownership proof holds (domain verified, or for a personal entry its email);
  * otherwise it goes back to 'pending'. Neither suspend → change domain →
  * reactivate nor suspend → reactivate of a never-verified personal entry can
- * publish anything. Only a suspended org can be reactivated.
- * Returns null if org_id not found or the org is not suspended.
+ * publish anything. Only a suspended org can be reactivated, and a taken-down
+ * entry is never reactivated by its owner.
+ * Returns null if org_id not found, the org is not suspended, or taken down.
  */
 export async function reactivateOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
@@ -544,10 +570,41 @@ export async function reactivateOrganization(orgId: string): Promise<Organizatio
         WHEN (domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified) THEN 'active'
         ELSE 'pending' END,
       updated_at = NOW()
-    WHERE org_id = ${orgId} AND status = 'suspended'
+    WHERE org_id = ${orgId} AND status = 'suspended' AND moderation <> 'takedown'
     RETURNING *
   `;
   return rows[0] ?? null;
+}
+
+/**
+ * Sets an entry's operator moderation. Leaves `status` and updated_at alone:
+ * moderation is the operator's axis, and updated_at drives catalog-probe
+ * order, which an operator action should not reshuffle.
+ * Returns null if org_id not found.
+ */
+export async function setModeration(orgId: string, moderation: Moderation): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET moderation = ${moderation}
+    WHERE org_id = ${orgId}
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * Sets moderation on every entry whose org_id starts with `prefix` (a literal
+ * prefix — starts_with, not LIKE, so `_` and `%` match only themselves).
+ * Returns the affected org_ids, sorted.
+ */
+export async function setModerationByPrefix(prefix: string, moderation: Moderation): Promise<string[]> {
+  const sql = getSql();
+  const rows = await sql<{ orgId: string }[]>`
+    UPDATE organizations SET moderation = ${moderation}
+    WHERE starts_with(org_id, ${prefix})
+    RETURNING org_id
+  `;
+  return rows.map((r) => r.orgId).sort();
 }
 
 /**
@@ -571,7 +628,7 @@ export async function searchOrganizations(query: string): Promise<Organization[]
   const pattern = `%${query.toLowerCase()}%`;
   return sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
       AND (
         LOWER(org_id)        LIKE ${pattern}
         OR LOWER(COALESCE(domain, ''))      LIKE ${pattern}
@@ -628,7 +685,7 @@ export async function rankOrganizationsForQuery(
     const rows = await sql<RankedOrganization[]>`
       SELECT o.*, ts_rank(search_vector, to_tsquery('english', ${orQuery})) AS rank
       FROM organizations o
-      WHERE status = 'active'
+      WHERE status = 'active' AND moderation = 'none'
         AND registry_url IS NOT NULL
         AND media_type <> ${POINTER_ONLY_MEDIA_TYPE}
         -- Catalogs and registries are fanned out to / referred to: domain proof required.
@@ -664,7 +721,7 @@ export async function listCatalogsToProbe(
   const sql = getSql();
   const rows = await sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
       AND registry_url IS NOT NULL
       AND media_type = ${ENTERPRISE_MEDIA_TYPE}
       -- Only a proven domain may be fanned out to on every search.
@@ -733,7 +790,7 @@ export async function listOrganizationsPaged(
 
   const rows = await sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active' ${cursorClause} ${filterClause}
+    WHERE status = 'active' AND moderation = 'none' ${cursorClause} ${filterClause}
     ORDER BY org_id ASC
     LIMIT ${limit + 1}
   `;
@@ -758,7 +815,7 @@ export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT media_type AS value, COUNT(*)::text AS count
     FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
     GROUP BY media_type
     ORDER BY count DESC
   `;
@@ -771,7 +828,7 @@ export async function countOrgsByTag(): Promise<FacetBucket[]> {
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT t AS value, COUNT(*)::text AS count
     FROM organizations, unnest(tags) AS t
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
     GROUP BY t
     ORDER BY count DESC
   `;

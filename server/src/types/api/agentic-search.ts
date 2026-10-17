@@ -15,6 +15,8 @@ export interface AgentCandidate {
   /** Publisher of the index entry the candidate was found through. */
   publisher?: PublisherBlock;
   trustManifest?: TrustManifest;
+  /** Always false alongside trustManifest: self-asserted, not verified by the index. */
+  trustManifestVerified?: false;
   provenance: {
     orgId: string;
     registryUrl: string;
@@ -71,6 +73,7 @@ const AGENT_CANDIDATE_SCHEMA = {
       },
     },
     trustManifest: TRUST_MANIFEST_SCHEMA,
+    trustManifestVerified: { type: 'boolean' },
     provenance: {
       type: 'object',
       required: ['orgId', 'registryUrl', 'basis'],

@@ -15,11 +15,14 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountVerificationRoutes } from './routes/account-verification.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
+import { registerAdminRoutes } from './routes/admin.js';
 import { registerMeRoute } from './routes/me.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { registerAgenticSearchRoutes } from './routes/agentic-search.js';
 import { registerArdRoutes } from './routes/ard.js';
 import { registerResolveRoute } from './routes/resolve.js';
+
+const MAX_BODY_BYTES = 64 * 1024;
 
 export interface BuildServerOptions {
   logger?: boolean;
@@ -33,6 +36,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
   const config = buildConfig();
 
   const fastify = Fastify({
+    // The largest legitimate body is an org create/update: a handful of short
+    // strings plus extensions / entry_data / trust_manifest, each capped at
+    // 16 KB (lib/jsonLimits.ts). 64 KB leaves headroom for that and rejects
+    // anything bigger before it is parsed (Fastify's default is 1 MB).
+    bodyLimit: MAX_BODY_BYTES,
     // Behind Caddy, request.ip must be the visitor's address, not the proxy's —
     // otherwise every per-IP rate limit is one bucket shared by all users.
     // Only the configured number of hops is trusted, so a client reaching the
@@ -64,6 +72,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAccountVerificationRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
+  await registerAdminRoutes(fastify);
   await registerMeRoute(fastify);
   await registerSearchRoutes(fastify);
   await registerAgenticSearchRoutes(fastify);

@@ -14,12 +14,14 @@ export class ResolutionError extends Error {
 }
 
 /**
- * Publicly visible only while active and with ownership proven — the domain
- * for a domain entry, the email for a personal one. Used by every public read
- * of a single entry (resolve, GET /api/v1/index/:org_id).
+ * Publicly visible only while active, not taken down by an operator, and
+ * with ownership proven — the domain for a domain entry, the email for a
+ * personal one. Used by every public read of a single entry (resolve,
+ * GET /api/v1/index/:org_id). A 'hidden' entry stays live: hiding only keeps
+ * it out of listings and search.
  */
 export function isLive(org: Organization | null): org is Organization {
-  return org?.status === 'active' && isProven(org);
+  return org?.status === 'active' && org.moderation !== 'takedown' && isProven(org);
 }
 
 export interface ResolvedEntry {

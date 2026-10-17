@@ -10,7 +10,23 @@ import { DomainVerification } from "@/components/DomainVerification";
 import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg, resendVerification } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
-import type { IndexRecord } from "@/lib/nanda-types";
+import type { IndexRecord, Moderation } from "@/lib/nanda-types";
+
+const MODERATION_MESSAGES: Record<Exclude<Moderation, "none">, string> = {
+  hidden:
+    "An index operator has hidden this entry: it no longer appears in listings or search, but it still resolves by its exact identifier.",
+  takedown:
+    "An index operator has taken this entry down: it is not listed or resolvable, and it cannot be reactivated from here. Contact the NANDA Index operators to have it reviewed.",
+};
+
+/** Explains operator moderation to the owner — set by operators, not editable here. */
+function ModerationNotice({ moderation }: { moderation: Exclude<Moderation, "none"> }) {
+  return (
+    <div role="status" className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      {MODERATION_MESSAGES[moderation]}
+    </div>
+  );
+}
 
 export default function OrgDetailPage() {
   useRequireAuth();
@@ -166,6 +182,7 @@ export default function OrgDetailPage() {
   return (
     <PageShell title={org.display_name} description={`org_id: ${org.org_id}`}>
       <div className="space-y-6">
+        {org.moderation && org.moderation !== "none" && <ModerationNotice moderation={org.moderation} />}
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={org.status} />
           {org.domain && (

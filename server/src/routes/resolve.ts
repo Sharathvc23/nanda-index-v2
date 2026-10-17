@@ -3,6 +3,7 @@ import { apiErrorSchema } from '../types/api/common.js';
 import { resolveResponseSchema } from '../types/api/resolve.js';
 import { parseAirUrn } from '../lib/airUrn.js';
 import { resolveIdentifier, ResolutionError } from '../services/resolution.js';
+import { publicReadRateLimit } from '../plugins/rateLimit.js';
 
 interface ResolveQuerystring {
   locator: string;
@@ -20,6 +21,7 @@ interface ResolveQuerystring {
  */
 export async function registerResolveRoute(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: ResolveQuerystring }>('/api/v1/resolve', {
+    config: publicReadRateLimit(),
     schema: {
       tags: ['resolve'],
       querystring: {

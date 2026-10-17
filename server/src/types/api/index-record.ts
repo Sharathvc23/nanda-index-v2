@@ -44,6 +44,10 @@ export interface TrustManifest {
   metadata?: Record<string, unknown>;
 }
 
+/** Operator moderation states (migration 017): see db/migrations/017_moderation_and_listing.sql. */
+export const MODERATION_STATES = ['none', 'hidden', 'takedown'] as const;
+export type Moderation = (typeof MODERATION_STATES)[number];
+
 /** Wire shape returned by the NANDA Index for a registered organization. */
 export interface IndexRecord {
   org_id: string;
@@ -69,6 +73,11 @@ export interface IndexRecord {
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
+  /** Always false when trust_manifest is present: the manifest is
+   *  self-asserted by the registrant and not verified by the index. */
+  trust_manifest_verified?: false;
+  /** Operator moderation; lets the owner's dashboard explain a hidden entry. */
+  moderation?: Moderation;
   /** LLM-generated natural-language task phrasings folded into search
    *  ranking — e.g. "help me send a transactional email" for an email API.
    *  Omitted when enrichment isn't configured or hasn't run for this org. */
@@ -131,6 +140,8 @@ export const INDEX_RECORD_SCHEMA = {
     data:       { type: 'object', additionalProperties: true },
     version:  { type: 'string' },
     trust_manifest: TRUST_MANIFEST_SCHEMA,
+    trust_manifest_verified: { type: 'boolean' },
+    moderation: { type: 'string', enum: MODERATION_STATES },
     representative_queries: { type: 'array', items: { type: 'string' } },
   },
 } as const;

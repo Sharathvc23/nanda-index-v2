@@ -71,7 +71,13 @@ export interface IndexRecord {
   data?: Record<string, unknown>;
   version?: string;
   trust_manifest?: TrustManifest;
+  /** Always false when trust_manifest is present: self-asserted, not verified by the index. */
+  trust_manifest_verified?: false;
+  /** Operator moderation: "hidden" = left out of listings/search; "takedown" = not served at all. */
+  moderation?: Moderation;
 }
+
+export type Moderation = "none" | "hidden" | "takedown";
 
 /** DNS TXT challenge issued to prove ownership of an org's domain. */
 export interface DomainChallenge {
@@ -114,6 +120,8 @@ export interface IndexCatalogEntry {
   tags: string[];
   publisher?: PublisherBlock;
   trustManifest?: TrustManifest;
+  /** Always false alongside trustManifest: self-asserted, not verified by the index. */
+  trustManifestVerified?: false;
   updatedAt: string;
   /** Routing hints, plus read-only operational state (orgId, status,
    *  ttlSeconds, emailVerified, domainVerified, createdAt, domain,
@@ -179,6 +187,8 @@ export interface AgentCandidate {
   /** Publisher of the index entry the candidate was found through. */
   publisher?: PublisherBlock;
   trustManifest?: TrustManifest;
+  /** Always false alongside trustManifest: self-asserted, not verified by the index. */
+  trustManifestVerified?: false;
   provenance: {
     orgId: string;
     registryUrl: string;

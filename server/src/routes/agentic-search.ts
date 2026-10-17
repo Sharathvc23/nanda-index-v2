@@ -4,6 +4,7 @@ import { agenticSearchQuerySchema, agenticSearchResponseSchema } from '../types/
 import { agenticSearch } from '../services/agenticSearch.js';
 import { buildConfig } from '../config/index.js';
 import { allowAnyUrl, publicUrlGuard } from '../lib/outboundUrl.js';
+import { searchRateLimit } from '../plugins/rateLimit.js';
 
 interface AgenticSearchQuerystring {
   q: string;
@@ -17,6 +18,7 @@ interface AgenticSearchQuerystring {
  */
 export async function registerAgenticSearchRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: AgenticSearchQuerystring }>('/api/v1/agentic-search', {
+    config: searchRateLimit(),
     schema: {
       tags: ['search'],
       querystring: agenticSearchQuerySchema,

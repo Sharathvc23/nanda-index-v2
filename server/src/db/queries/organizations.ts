@@ -23,6 +23,8 @@ export interface Organization {
   domainChallenge: string | null;
   domainChallengeExpiresAt: Date | null;
   domainVerifiedAt: Date | null;
+  /** Ownership was proven at least once; never cleared, even if proof is later lost. */
+  everProven: boolean;
   ttlSeconds: number;
   status: 'pending' | 'active' | 'suspended';
   createdAt: Date;
@@ -167,9 +169,70 @@ export async function findByOrgId(orgId: string): Promise<Organization | null> {
 export async function findByDomain(domain: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
-    SELECT * FROM organizations WHERE lower(domain) = lower(${domain}) LIMIT 1
+    SELECT * FROM organizations WHERE lower(domain) = lower(${domain})
+    ORDER BY domain_verified DESC, created_at ASC
+    LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+/**
+ * Whether an org's ownership proof holds: a domain entry needs its domain
+ * verified, a personal (domain-less) entry its email. Only proven rows may be
+ * published, and only proven rows reserve a domain or identifier.
+ */
+export function isProven(org: Pick<Organization, 'domain' | 'domainVerified' | 'emailVerified'>): boolean {
+  return org.domain !== null ? org.domainVerified : org.emailVerified;
+}
+
+/** The proven org holding this domain, if any — the only kind that blocks others. */
+export async function findProvenByDomain(domain: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE lower(domain) = lower(${domain}) AND domain_verified
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/** The proven org holding this identifier, if any — the only kind that blocks others. */
+export async function findProvenByIdentifier(identifier: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE identifier = ${identifier}
+      AND ((domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified))
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * How many fresh unproven claims a user holds: never-proven orgs they
+ * administer that are still inside the slug hold period. Expired claims don't
+ * count, so abandoned registrations cannot lock their owner out of new ones.
+ */
+export async function countUnprovenOrgsForUser(userId: string, holdHours: number): Promise<number> {
+  const sql = getSql();
+  const rows = await sql<{ count: string }[]>`
+    SELECT count(*) AS count
+    FROM organizations o
+    JOIN org_memberships m ON m.org_id = o.org_id
+    WHERE m.user_id = ${userId} AND m.role = 'admin'
+      AND NOT o.ever_proven
+      AND o.created_at > NOW() - make_interval(hours => ${holdHours})
+  `;
+  return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Serialises proofs of the same domain or identifier: two registrants proving
+ * at the same instant would otherwise each lock the row the other deletes, and
+ * Postgres aborts one with a deadlock instead of a clean unique conflict.
+ */
+async function lockClaim(tx: postgres.TransactionSql, key: string): Promise<void> {
+  await tx`SELECT pg_advisory_xact_lock(hashtext(${`nanda-claim:${key}`}))`;
 }
 
 /**
@@ -179,7 +242,10 @@ export async function findByDomain(domain: string): Promise<Organization | null>
 export async function findByIdentifier(identifier: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
-    SELECT * FROM organizations WHERE identifier = ${identifier} LIMIT 1
+    SELECT * FROM organizations WHERE identifier = ${identifier}
+    ORDER BY ((domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified)) DESC,
+             created_at ASC
+    LIMIT 1
   `;
   return rows[0] ?? null;
 }
@@ -315,20 +381,37 @@ export async function updateOrganization(
  */
 export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
-  const rows = await sql<Organization[]>`
-    UPDATE organizations SET
-      email_verified           = TRUE,
-      verify_token             = NULL,
-      verify_token_expires_at  = NULL,
-      status = CASE
-        WHEN domain IS NULL AND status = 'pending' THEN 'active'
-        ELSE status END,
-      updated_at               = NOW()
-    WHERE verify_token = ${token}
-      AND verify_token_expires_at > NOW()
-    RETURNING *
-  `;
-  return rows[0] ?? null;
+  return sql.begin(async (tx) => {
+    const [target] = await tx<{ identifier: string }[]>`
+      SELECT identifier FROM organizations WHERE verify_token = ${token}
+    `;
+    if (target) await lockClaim(tx, target.identifier);
+    const rows = await tx<Organization[]>`
+      UPDATE organizations SET
+        ever_proven              = (ever_proven OR domain IS NULL),
+        email_verified           = TRUE,
+        verify_token             = NULL,
+        verify_token_expires_at  = NULL,
+        status = CASE
+          WHEN domain IS NULL AND status = 'pending' THEN 'active'
+          ELSE status END,
+        updated_at               = NOW()
+      WHERE verify_token = ${token}
+        AND verify_token_expires_at > NOW()
+      RETURNING *
+    `;
+    const org = rows[0] ?? null;
+    // A personal identifier is now proven: competing unproven claims on the
+    // same email lose, so a squatter's earlier registration cannot linger.
+    if (org && org.domain === null) {
+      await tx`
+        DELETE FROM organizations
+        WHERE identifier = ${org.identifier} AND org_id <> ${org.orgId}
+          AND domain IS NULL AND NOT email_verified
+      `;
+    }
+    return org;
+  }) as Promise<Organization | null>;
 }
 
 /**
@@ -361,18 +444,35 @@ export async function setDomainChallenge(
  */
 export async function markDomainVerified(orgId: string): Promise<Organization | null> {
   const sql = getSql();
-  const rows = await sql<Organization[]>`
-    UPDATE organizations SET
-      domain_verified             = TRUE,
-      domain_verified_at          = NOW(),
-      domain_challenge            = NULL,
-      domain_challenge_expires_at = NULL,
-      status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
-      updated_at                  = NOW()
-    WHERE org_id = ${orgId}
-    RETURNING *
-  `;
-  return rows[0] ?? null;
+  return sql.begin(async (tx) => {
+    const [target] = await tx<{ domain: string | null }[]>`
+      SELECT domain FROM organizations WHERE org_id = ${orgId}
+    `;
+    if (target?.domain) await lockClaim(tx, `domain:${target.domain.toLowerCase()}`);
+    const rows = await tx<Organization[]>`
+      UPDATE organizations SET
+        ever_proven                 = TRUE,
+        domain_verified             = TRUE,
+        domain_verified_at          = NOW(),
+        domain_challenge            = NULL,
+        domain_challenge_expires_at = NULL,
+        status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+        updated_at                  = NOW()
+      WHERE org_id = ${orgId}
+      RETURNING *
+    `;
+    const org = rows[0] ?? null;
+    // First proof wins: every unproven claim on this domain is removed, so
+    // registering a domain you do not control cannot block its owner.
+    if (org?.domain) {
+      await tx`
+        DELETE FROM organizations
+        WHERE lower(domain) = lower(${org.domain}) AND org_id <> ${org.orgId}
+          AND NOT domain_verified
+      `;
+    }
+    return org;
+  }) as Promise<Organization | null>;
 }
 
 /**
@@ -393,18 +493,21 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
 
 /**
  * Reactivates a suspended organization. It returns to 'active' only when its
- * ownership proof still holds — a domain org whose domain is unverified (e.g.
- * the domain was changed while suspended) goes back to 'pending' instead, so
- * suspend → change domain → reactivate cannot bypass the DNS challenge.
- * Returns null if org_id not found.
+ * ownership proof holds (domain verified, or for a personal entry its email);
+ * otherwise it goes back to 'pending'. Neither suspend → change domain →
+ * reactivate nor suspend → reactivate of a never-verified personal entry can
+ * publish anything. Only a suspended org can be reactivated.
+ * Returns null if org_id not found or the org is not suspended.
  */
 export async function reactivateOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      status     = CASE WHEN domain IS NOT NULL AND NOT domain_verified THEN 'pending' ELSE 'active' END,
+      status     = CASE
+        WHEN (domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified) THEN 'active'
+        ELSE 'pending' END,
       updated_at = NOW()
-    WHERE org_id = ${orgId}
+    WHERE org_id = ${orgId} AND status = 'suspended'
     RETURNING *
   `;
   return rows[0] ?? null;

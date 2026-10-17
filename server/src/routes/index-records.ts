@@ -3,6 +3,7 @@ import { findAllActive, findByOrgId, markEmailVerifiedByToken, toIndexEntry, toI
 import { INDEX_RECORD_SCHEMA } from '../types/api/index-record.js';
 import { INDEX_ENTRY_SCHEMA } from '../types/api/index-entry.js';
 import { apiErrorSchema } from '../types/api/common.js';
+import { isLive } from '../services/resolution.js';
 
 /**
  * Public read-only routes for the NANDA Index.
@@ -44,8 +45,11 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
       },
     },
   }, async (request, reply) => {
+    // Same visibility rule as resolve: pending or suspended entries are not
+    // public (and a personal one carries the registrant's email). Owners see
+    // their own entry via the authenticated GET /api/v1/orgs/:org_id.
     const org = await findByOrgId(request.params.org_id);
-    if (!org) {
+    if (!isLive(org)) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
     return reply.send(toIndexEntry(org));
@@ -66,6 +70,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
         200: INDEX_RECORD_SCHEMA,
         400: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
@@ -73,7 +78,16 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     if (!token) {
       return reply.code(400).send({ error: 'BAD_REQUEST', detail: 'token query parameter is required' });
     }
-    const org = await markEmailVerifiedByToken(token);
+    let org;
+    try {
+      org = await markEmailVerifiedByToken(token);
+    } catch (err) {
+      // Another registration proved this email first — first proof wins.
+      if ((err as { code?: unknown }).code === '23505') {
+        return reply.code(409).send({ error: 'CONFLICT', detail: 'this identity was verified by another registration' });
+      }
+      throw err;
+    }
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: 'verification token not found or already used' });
     }

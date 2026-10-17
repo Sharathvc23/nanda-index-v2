@@ -77,6 +77,16 @@ export interface AuthConfig {
   readonly resetTokenTtlMinutes: number;
 }
 
+export interface ClaimsConfig {
+  /** Max org create/update requests per window per client IP. */
+  readonly writeRateLimitMax: number;
+  readonly writeRateLimitWindow: string;
+  /** How many unproven (unverified) orgs one account may hold at once. */
+  readonly maxUnprovenPerUser: number;
+  /** How long an unproven org keeps its org_id slug before others may take it. */
+  readonly unprovenSlugHoldHours: number;
+}
+
 export interface SigningConfig {
   readonly privateKey: string | undefined;
   readonly keyId: string;
@@ -116,6 +126,11 @@ export interface Config {
   readonly email: EmailConfig;
   readonly cookie: CookieConfig;
   readonly auth: AuthConfig;
+  readonly claims: ClaimsConfig;
+  /** Reverse-proxy hops in front of the API whose X-Forwarded-For is trusted
+   *  (1 behind Caddy in production). 0 = reached directly; the header is then
+   *  ignored, since any client could forge it to dodge per-IP rate limits. */
+  readonly trustProxyHops: number;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
   /** Public base URL this API is reachable at — used to build absolute
@@ -201,6 +216,19 @@ export function buildConfig(): Config {
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
       ),
     },
+    claims: {
+      writeRateLimitMax: parsePositiveInt(
+        'ORG_WRITE_RATE_LIMIT_MAX', optionalEnv('ORG_WRITE_RATE_LIMIT_MAX', '30'),
+      ),
+      writeRateLimitWindow: optionalEnv('ORG_WRITE_RATE_LIMIT_WINDOW', '1 hour'),
+      maxUnprovenPerUser: parsePositiveInt(
+        'MAX_UNPROVEN_ORGS_PER_USER', optionalEnv('MAX_UNPROVEN_ORGS_PER_USER', '5'),
+      ),
+      unprovenSlugHoldHours: parsePositiveInt(
+        'UNPROVEN_SLUG_HOLD_HOURS', optionalEnv('UNPROVEN_SLUG_HOLD_HOURS', '48'),
+      ),
+    },
+    trustProxyHops: Number.parseInt(optionalEnv('TRUST_PROXY_HOPS', '0'), 10) || 0,
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,

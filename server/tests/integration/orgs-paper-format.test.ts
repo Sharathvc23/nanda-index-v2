@@ -140,36 +140,43 @@ describe('Org registration — paper-format index records', () => {
     expect((await create({ ...base, media_type: 'application/vnd.dns-aid+json' })).statusCode).toBe(400);
   });
 
-  it('rejects a domain already held by another entry with 409', async () => {
+  it('rejects a domain whose ownership another entry has proven with 409', async () => {
     const payload = {
       display_name: 'Bakery', hosting_path: 'smb', domain: 'pf-bakery.com',
       contact_email: 'x@pf-bakery.com', registry_url: 'https://agentcards.host39.org/pf-bakery/orders.json',
     };
     expect((await create({ ...payload, org_id: 'pf-orders' })).statusCode).toBe(201);
+    await getSql()`UPDATE organizations SET domain_verified = true, status = 'active' WHERE org_id = 'pf-orders'`;
     expect((await create({ ...payload, org_id: 'pf-orders-2' })).statusCode).toBe(409);
   });
 
-  describe('abandoned personal registrations do not hold an identifier hostage', () => {
+  it('does not let an unproven domain claim block another registrant', async () => {
+    const payload = {
+      display_name: 'Bakery', hosting_path: 'smb', domain: 'pf-open.com',
+      contact_email: 'x@pf-open.com', registry_url: 'https://agentcards.host39.org/pf-open/orders.json',
+    };
+    expect((await create({ ...payload, org_id: 'pf-open-1' })).statusCode).toBe(201);
+    expect((await create({ ...payload, org_id: 'pf-open-2' })).statusCode).toBe(201);
+  });
+
+  describe('unproven personal registrations do not hold an identifier hostage', () => {
     const personal = (orgId: string, email: string) => create({
       org_id: orgId, display_name: 'Personal', hosting_path: 'personal',
       contact_email: email, registry_url: `https://agentcards.host39.org/personal/${email}/card.json`,
     });
 
-    it('releases an unverified registration whose verification link has expired', async () => {
+    it('lets the owner register an email someone else claimed without verifying', async () => {
       expect((await personal('pf-squatter', 'pf-victim@corp.example')).statusCode).toBe(201);
-      await getSql()`UPDATE organizations SET verify_token_expires_at = NOW() - INTERVAL '1 minute' WHERE org_id = 'pf-squatter'`;
 
       const res = await personal('pf-owner', 'pf-victim@corp.example');
 
       expect(res.statusCode).toBe(201);
       expect(res.json().identifier).toBe('urn:air:host39.org:personal:pf-victim@corp.example');
-      const left = await getSql()`SELECT org_id FROM organizations WHERE org_id = 'pf-squatter'`;
-      expect(left).toHaveLength(0);
     });
 
-    it('still blocks while the verification link is valid', async () => {
+    it('does not block while the first claim\'s verification link is still valid', async () => {
       expect((await personal('pf-first', 'pf-pending@corp.example')).statusCode).toBe(201);
-      expect((await personal('pf-second', 'pf-pending@corp.example')).statusCode).toBe(409);
+      expect((await personal('pf-second', 'pf-pending@corp.example')).statusCode).toBe(201);
     });
 
     it('still blocks once the email has been verified', async () => {

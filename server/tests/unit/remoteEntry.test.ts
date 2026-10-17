@@ -72,7 +72,7 @@ function enterpriseOrg(): RankedOrganization {
     id: 'id', orgId: 'acme', displayName: 'Acme', domain: ORG_DOMAIN,
     contactEmail: 'a@acme.example.com', registryUrl: 'https://acme.example.com/registry',
     emailVerified: true, verifyToken: null, verifyTokenExpiresAt: null, domainVerified: true,
-    domainChallenge: null, domainChallengeExpiresAt: null, domainVerifiedAt: new Date(),
+    domainChallenge: null, domainChallengeExpiresAt: null, domainVerifiedAt: new Date(), everProven: true,
     ttlSeconds: 86400, status: 'active', createdAt: new Date(), updatedAt: new Date(),
     identifier: `urn:air:${ORG_DOMAIN}:catalog:root`, mediaType: 'application/ai-catalog+json',
     description: null, tags: [], publisher: null, extensions: { 'org.projectnanda': {} },

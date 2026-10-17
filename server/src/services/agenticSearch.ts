@@ -78,7 +78,9 @@ function toAgentCandidate(
     description: entry.description ?? null,
     tags: entry.tags ?? [],
     publisher: org.publisher ?? undefined,
-    trustManifest: org.trustManifest ?? undefined,
+    // Self-asserted by the registrant, never checked by the index — flagged
+    // so a caller does not mistake it for vetted trust data.
+    ...(org.trustManifest ? { trustManifest: org.trustManifest, trustManifestVerified: false as const } : {}),
     provenance: {
       orgId: org.orgId,
       registryUrl: org.registryUrl!,

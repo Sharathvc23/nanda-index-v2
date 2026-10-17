@@ -8,7 +8,7 @@ async function seedOrg(
   orgId: string,
   domain: string | null,
   displayName: string,
-  opts: { status?: string; emailVerified?: boolean; verifyToken?: string } = {},
+  opts: { status?: string; emailVerified?: boolean; verifyToken?: string; domainVerified?: boolean } = {},
 ): Promise<void> {
   const sql = getSql();
   const token = opts.verifyToken ?? randomBytes(16).toString('hex');
@@ -18,11 +18,12 @@ async function seedOrg(
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url,
-       verify_token, verify_token_expires_at, email_verified, status, identifier)
+       verify_token, verify_token_expires_at, email_verified, status, identifier, domain_verified)
     VALUES
       (${orgId}, ${displayName}, ${domain}, ${contactEmail},
        ${registryUrl}, ${token}, NOW() + INTERVAL '24 hours',
-       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier})
+       ${opts.emailVerified ?? true}, ${opts.status ?? 'active'}, ${identifier},
+       ${opts.domainVerified ?? false})
     ON CONFLICT (org_id) DO NOTHING
   `;
 }
@@ -111,7 +112,8 @@ describe('NANDA Index — public read routes', () => {
   });
 
   it('returns a single paper-shaped record by org_id', async () => {
-    await seedOrg('idx-single', 'single.example.com', 'Single Org');
+    // Only a live entry (active, ownership proven) is publicly readable.
+    await seedOrg('idx-single', 'single.example.com', 'Single Org', { domainVerified: true });
 
     const res = await fastify.inject({ method: 'GET', url: '/api/v1/index/idx-single' });
     expect(res.statusCode).toBe(200);
@@ -128,7 +130,18 @@ describe('NANDA Index — public read routes', () => {
     expect(res.json().error).toBe('NOT_FOUND');
   });
 
-  // ── GET /api/v1/verify-email ────────────────────────────────────────────────
+  // An unverified claim to a domain must not be publicly readable, and the
+  // response must not reveal the entry's contents or status.
+  it.each(['pending', 'suspended'])('returns 404 for a %s org, indistinguishable from an unknown one', async (status) => {
+    await seedOrg(`idx-${status}`, `${status}.example.com`, `${status} Org`, { status });
+
+    const res = await fastify.inject({ method: 'GET', url: `/api/v1/index/idx-${status}` });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'NOT_FOUND', detail: `org "idx-${status}" not found` });
+  });
+
+  // ── POST /api/v1/verify-email ───────────────────────────────────────────────
 
   it('marks email verified via valid token but does NOT activate (domain gate)', async () => {
     const token = randomBytes(16).toString('hex');
@@ -139,8 +152,9 @@ describe('NANDA Index — public read routes', () => {
     });
 
     const res = await fastify.inject({
-      method: 'GET',
-      url: `/api/v1/verify-email?token=${token}`,
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().email_verified).toBe(true);
@@ -158,8 +172,9 @@ describe('NANDA Index — public read routes', () => {
     });
 
     const res = await fastify.inject({
-      method: 'GET',
-      url: `/api/v1/verify-email?token=${token}`,
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().email_verified).toBe(true);
@@ -168,15 +183,16 @@ describe('NANDA Index — public read routes', () => {
     expect(res.json().domain).toBe(null);
   });
 
-  it('returns 400 when token query param is missing', async () => {
-    const res = await fastify.inject({ method: 'GET', url: '/api/v1/verify-email' });
+  it('returns 400 when the token is missing', async () => {
+    const res = await fastify.inject({ method: 'POST', url: '/api/v1/verify-email', payload: {} });
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 404 for invalid verify token', async () => {
     const res = await fastify.inject({
-      method: 'GET',
-      url: '/api/v1/verify-email?token=totally-invalid-token-xyz',
+      method: 'POST',
+      url: '/api/v1/verify-email',
+      payload: { token: 'totally-invalid-token-xyz' },
     });
     expect(res.statusCode).toBe(404);
   });

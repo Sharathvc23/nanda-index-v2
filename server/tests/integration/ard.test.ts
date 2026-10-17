@@ -18,10 +18,10 @@ async function seedOrg(opts: {
   await sql`
     INSERT INTO organizations
       (org_id, display_name, domain, contact_email, registry_url, verify_token, email_verified, status,
-       identifier, media_type, description, tags)
+       domain_verified, identifier, media_type, description, tags)
     VALUES
       (${opts.orgId}, ${opts.displayName}, ${opts.domain}, ${`admin@${opts.domain}`},
-       ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true, 'active',
+       ${opts.registryUrl ?? `https://${opts.domain}/registry`}, ${verifyToken}, true, 'active', true,
        ${`urn:air:${opts.domain}:catalog:root`},
        ${opts.mediaType ?? 'application/ai-catalog+json'},
        ${opts.description ?? null},

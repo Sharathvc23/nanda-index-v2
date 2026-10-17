@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError, requestDomainChallenge, verifyDomain } from "@/lib/nanda-api";
 import type { DomainChallenge, IndexRecord } from "@/lib/nanda-types";
 
@@ -37,12 +37,28 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 
 // ── Domain verification ─────────────────────────────────────────────────────────
 
+/** The API's machine-readable error code (e.g. "NO_ACTIVE_CHALLENGE"), if any. */
+function apiErrorCode(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const payload = err.payload as { error?: unknown } | null | undefined;
+  return typeof payload?.error === "string" ? payload.error : null;
+}
+
+/** The record name relative to the zone — what a provider's "Host" field expects. */
+function hostLabel(recordName: string, domain: string): string {
+  const suffix = `.${domain}`;
+  return recordName.endsWith(suffix) ? recordName.slice(0, -suffix.length) : recordName;
+}
+
 /**
  * Proves ownership of an org's domain via a DNS TXT challenge.
  *
- * Flow: generate a challenge → the user publishes the TXT record at their DNS
- * host → "Check DNS" resolves it and, on success, activates the org. Mutations
- * require the admin role; the API returns 403 for non-admins, surfaced inline.
+ * Flow: load the challenge → the user publishes the TXT record at their DNS
+ * host → "Check DNS" resolves it and, on success, activates the org. The server
+ * returns the same challenge until it expires, so it is loaded on mount and
+ * survives reloads. Only admins may see the challenge; members get a 403, shown
+ * as a plain note rather than an error. Remount (key on the domain) when the
+ * domain changes so a challenge for the old domain is not shown.
  */
 export function DomainVerification({
   org,
@@ -51,10 +67,30 @@ export function DomainVerification({
   org: IndexRecord;
   onVerified: (updated: IndexRecord) => void;
 }) {
+  const needsChallenge = Boolean(org.domain) && !org.domain_verified;
   const [challenge, setChallenge] = useState<DomainChallenge | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(needsChallenge);
+  const [adminOnly, setAdminOnly] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped to (re)load the challenge — e.g. after a failed load or an expiry.
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!needsChallenge) return;
+    let cancelled = false;
+
+    requestDomainChallenge(org.org_id)
+      .then((data) => { if (!cancelled) setChallenge(data); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 403) setAdminOnly(true);
+        else setError(err instanceof ApiError ? err.message : "Could not load the DNS record.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [org.org_id, needsChallenge, attempt]);
 
   if (!org.domain) {
     return null;
@@ -77,16 +113,10 @@ export function DomainVerification({
     );
   }
 
-  async function generate() {
-    setGenerating(true);
-    setError(null);
-    try {
-      setChallenge(await requestDomainChallenge(org.org_id));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not generate a challenge.");
-    } finally {
-      setGenerating(false);
-    }
+  function reload() {
+    setChallenge(null);
+    setLoading(true);
+    setAttempt((n) => n + 1);
   }
 
   async function check() {
@@ -95,7 +125,13 @@ export function DomainVerification({
     try {
       onVerified(await verifyDomain(org.org_id));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Verification failed.");
+      if (apiErrorCode(err) === "NO_ACTIVE_CHALLENGE") {
+        // The shown record expired; fetch its replacement for the user to publish.
+        reload();
+        setError("That record expired. Replace the TXT value at your DNS provider with the new one below, then check again.");
+      } else {
+        setError(err instanceof ApiError ? err.message : "Verification failed.");
+      }
     } finally {
       setChecking(false);
     }
@@ -112,7 +148,13 @@ export function DomainVerification({
         </p>
       </div>
 
-      {challenge ? (
+      {adminOnly ? (
+        <p className="text-xs text-amber-800">
+          Only org admins can view the DNS record and verify the domain.
+        </p>
+      ) : loading ? (
+        <p className="text-xs text-amber-700">Loading DNS record…</p>
+      ) : challenge ? (
         <div className="space-y-3">
           <p className="text-xs text-amber-800">
             Add this TXT record at your DNS provider, then check below. DNS changes can take a few
@@ -120,36 +162,33 @@ export function DomainVerification({
           </p>
           <div className="space-y-2">
             <CopyRow label="Type" value={challenge.record_type} />
-            <CopyRow label="Name / Host" value={challenge.record_name} />
+            <CopyRow label="Name" value={challenge.record_name} />
+            <CopyRow label="Host" value={hostLabel(challenge.record_name, challenge.domain)} />
             <CopyRow label="Value" value={challenge.record_value} />
           </div>
-          <p className="text-[11px] text-amber-600">
-            Challenge expires {new Date(challenge.expires_at).toLocaleString()}.
+          <p className="text-[11px] text-amber-700">
+            Most DNS providers (Namecheap, GoDaddy, Cloudflare…) add your domain automatically — enter
+            only the <span className="font-semibold">Host</span> value, or the record ends up at{" "}
+            <span className="font-mono">{challenge.record_name}.{challenge.domain}</span>.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={check}
-              disabled={checking}
-              className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {checking ? "Checking DNS…" : "Check DNS now"}
-            </button>
-            <button
-              onClick={generate}
-              disabled={generating}
-              className="rounded-2xl border border-amber-300 bg-white px-5 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
-            >
-              {generating ? "Regenerating…" : "Regenerate"}
-            </button>
-          </div>
+          <p className="text-[11px] text-amber-600">
+            This record stays the same until {new Date(challenge.expires_at).toLocaleString()} —
+            you can leave and come back to check.
+          </p>
+          <button
+            onClick={check}
+            disabled={checking}
+            className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {checking ? "Checking DNS…" : "Check DNS now"}
+          </button>
         </div>
       ) : (
         <button
-          onClick={generate}
-          disabled={generating}
-          className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+          onClick={() => { setError(null); reload(); }}
+          className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-medium text-white"
         >
-          {generating ? "Generating…" : "Generate DNS record"}
+          Get DNS record
         </button>
       )}
 

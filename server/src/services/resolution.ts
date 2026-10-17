@@ -1,4 +1,4 @@
-import { findByDomain, findByIdentifier, toIndexEntry, type Organization } from '../db/queries/organizations.js';
+import { findByDomain, findByIdentifier, isProven, toIndexEntry, type Organization } from '../db/queries/organizations.js';
 import type { ParsedAirUrn } from '../lib/airUrn.js';
 import { CATALOG_MEDIA_TYPES } from '../lib/mediaTypes.js';
 import type { ResolveMatch, ResolveResponse } from '../types/api/resolve.js';
@@ -13,9 +13,15 @@ export class ResolutionError extends Error {
   }
 }
 
-/** Resolvable only while active and, for domain entries, with domain ownership proven. */
-function isLive(org: Organization | null): org is Organization {
-  return org?.status === 'active' && (org.domain === null || org.domainVerified);
+/**
+ * Publicly visible only while active, not taken down by an operator, and
+ * with ownership proven — the domain for a domain entry, the email for a
+ * personal one. Used by every public read of a single entry (resolve,
+ * GET /api/v1/index/:org_id). A 'hidden' entry stays live: hiding only keeps
+ * it out of listings and search.
+ */
+export function isLive(org: Organization | null): org is Organization {
+  return org?.status === 'active' && org.moderation !== 'takedown' && isProven(org);
 }
 
 export interface ResolvedEntry {

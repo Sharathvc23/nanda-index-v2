@@ -55,6 +55,7 @@ GUESTS = [
         org_query="regentix",
         agent_label="regentix-ceo",
         agent_url="https://ceo.test",
+        registry_url="https://regentix.test",
     ),
     Guest(
         who="the chief scientist",
@@ -62,6 +63,7 @@ GUESTS = [
         org_query="astrocity",
         agent_label="astrocity-chief-scientist",
         agent_url="https://sci.test",
+        registry_url="https://astrocity.test",
     ),
 ]
 

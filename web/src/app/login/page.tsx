@@ -81,7 +81,12 @@ function LoginPageInner() {
             OAuth login is not configured on this server. Use email and password instead.
           </p>
         )}
-        {oauthError && oauthError !== "oauth_not_configured" && (
+        {oauthError === "account_exists" && (
+          <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
+            An account with this email already exists. Sign in the way you registered (for example, with your password).
+          </p>
+        )}
+        {oauthError && oauthError !== "oauth_not_configured" && oauthError !== "account_exists" && (
           <p className="rounded-control border border-[#b42318]/30 bg-[#fef3f2] px-4 py-2.5 text-sm text-[#b42318]">
             Sign-in failed. Please try again.
           </p>

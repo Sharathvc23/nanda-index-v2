@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { findByOrgId, findByDomain, findByIdentifier, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, setDomainChallenge, markDomainVerified, toIndexRecord, type Organization } from '../db/queries/organizations.js';
+import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
 import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
@@ -16,6 +16,10 @@ import { apiErrorSchema } from '../types/api/common.js';
 import type { JwtPayload } from '../plugins/jwt.js';
 import type { TrustManifest } from '../types/api/index-record.js';
 import { isFqdn, PERSONAL_CARD_HOST } from '../lib/airUrn.js';
+import { oversizedJsonField } from '../lib/jsonLimits.js';
+import { isReservedOrgId } from '../lib/reservedOrgIds.js';
+import { isOperator } from '../services/operators.js';
+import { isAbandonedClaim } from '../services/claims.js';
 import {
   ALLOWED_MEDIA_TYPES,
   HOSTING_PATHS,
@@ -35,6 +39,9 @@ const PUBLISHER_INPUT_SCHEMA = {
 } as const;
 
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Minimum gap between verification emails for one org (resend). */
+const RESEND_COOLDOWN_MS = 60 * 1000;
 
 /** PUT /api/v1/orgs/:org_id body — exactly the fields an admin may change. */
 const UPDATE_ORG_BODY_SCHEMA = {
@@ -84,6 +91,33 @@ async function rejectUnknownUpdateFields(request: FastifyRequest, reply: Fastify
     error: 'UNKNOWN_FIELDS',
     detail: `these fields cannot be changed via PUT: ${unknown.join(', ')}. Editable fields: ${EDITABLE_FIELDS.join(', ')} (publisher: ${EDITABLE_PUBLISHER_FIELDS.join(', ')})`,
   });
+}
+
+/** Free-form client JSON fields capped by size and depth (see lib/jsonLimits.ts). */
+const CAPPED_JSON_FIELDS: readonly string[] = ['extensions', 'entry_data', 'trust_manifest'];
+
+/** preHandler: 400 PAYLOAD_TOO_LARGE when a free-form JSON field is over its cap. */
+async function rejectOversizedJson(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (typeof request.body !== 'object' || request.body === null) return;
+  const problem = oversizedJsonField(request.body as Record<string, unknown>, CAPPED_JSON_FIELDS);
+  if (problem) reply.code(400).send({ error: 'PAYLOAD_TOO_LARGE', detail: problem });
+}
+
+const MODERATED_ERROR = {
+  error: 'MODERATED',
+  detail: 'this entry was taken down by an index operator; contact the operators to have it reviewed',
+} as const;
+
+/**
+ * preHandler for owner lifecycle routes (suspend/reactivate): an operator
+ * takedown cannot be undone — or toggled around — by the owner.
+ */
+async function rejectIfTakenDown(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { org_id } = request.params as { org_id: string };
+  const org = await findByOrgId(org_id);
+  if (org?.moderation === 'takedown') {
+    reply.code(403).send(MODERATED_ERROR);
+  }
 }
 
 /** Wire shape returned when an org admin requests a DNS challenge. */
@@ -150,6 +184,17 @@ function withBlankDomainAsNull(body: CreateOrgBody): CreateOrgBody {
   return body.domain?.trim() ? body : { ...body, domain: null };
 }
 
+/**
+ * On update, a blank domain means "leave it unchanged": edit forms send '' for
+ * personal entries, which have no domain, and that must not read as an attempt
+ * to give them one.
+ */
+function withoutBlankDomain(body: UpdateOrgBody): UpdateOrgBody {
+  if (body.domain === undefined || body.domain.trim()) return body;
+  const { domain: _blank, ...rest } = body;
+  return rest;
+}
+
 /** Checks the create body's hosting-path invariants; returns the first problem or null. */
 function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | null {
   if (path === 'personal' && body.domain) {
@@ -167,37 +212,31 @@ function validateCreateBody(body: CreateOrgBody, path: HostingPath): ApiError | 
   return null;
 }
 
-/** Rejects an identifier or domain another entry already holds. */
 /**
- * A personal registration whose email was never verified and whose
- * verification link has expired can never activate (there is no resend), so
- * it must not keep holding the identifier: otherwise anyone could register a
- * victim's email and lock them out of their own identifier forever. Domain
- * rows are excluded — they activate via DNS, independently of the email link.
- */
-function isAbandonedPersonal(org: Organization, now: Date = new Date()): boolean {
-  return org.domain === null
-    && org.status === 'pending'
-    && !org.emailVerified
-    && (org.verifyTokenExpiresAt === null || org.verifyTokenExpiresAt <= now);
-}
-
-/**
- * Rejects an identifier or domain another entry already holds. An abandoned
- * personal registration holding the identifier is deleted instead, freeing it.
+ * Rejects an identifier or domain a *proven* entry holds. Unproven claims
+ * reserve nothing — any number may target the same domain or email, and the
+ * first to prove ownership wins (markDomainVerified / markEmailVerifiedByToken
+ * then remove the rest). So registering mit.edu without controlling its DNS
+ * cannot block MIT.
  */
 async function findConflict(identifier: string, domain: string | null, selfOrgId?: string): Promise<ApiError | null> {
-  const byIdentifier = await findByIdentifier(identifier);
+  const byIdentifier = await findProvenByIdentifier(identifier);
   if (byIdentifier && byIdentifier.orgId !== selfOrgId) {
-    if (!isAbandonedPersonal(byIdentifier)) {
-      return conflictError(`identifier "${identifier}" is already registered`);
-    }
-    await deleteOrganization(byIdentifier.orgId);
+    return conflictError(`identifier "${identifier}" is already registered`);
   }
-  const byDomain = domain ? await findByDomain(domain) : null;
+  const byDomain = domain ? await findProvenByDomain(domain) : null;
   if (byDomain && byDomain.orgId !== selfOrgId) {
     return conflictError(`domain "${domain}" is already registered`);
   }
+  return null;
+}
+
+/** org_id is a global handle: free unless held by a fresh or proven org. */
+async function findSlugConflict(orgId: string): Promise<ApiError | null> {
+  const holder = await findByOrgId(orgId);
+  if (!holder) return null;
+  if (!isAbandonedClaim(holder)) return conflictError(`org_id "${orgId}" is already taken`);
+  await deleteOrganization(holder.orgId);
   return null;
 }
 
@@ -271,6 +310,9 @@ function requireOrgRole(level: 'member' | 'admin') {
 /**
  * Protected org management routes. All routes require a valid JWT; the
  * :org_id routes additionally enforce a membership role via requireOrgRole.
+ * Every write also requires a verified account email (requireVerifiedAccount,
+ * 403 ACCOUNT_NOT_VERIFIED) — an unproven address must not be able to put
+ * agents into the index. Reads stay open to members.
  *
  *   POST   /api/v1/orgs                          — create an org (caller becomes admin; sends verification email)
  *   GET    /api/v1/orgs/:org_id                  — read own org              (member)
@@ -282,9 +324,17 @@ function requireOrgRole(level: 'member' | 'admin') {
  *   DELETE /api/v1/orgs/:org_id                  — permanently delete org    (admin)
  */
 export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void> {
+  // Registration and edits send email and may call the LLM enrichment API, so
+  // they are throttled per client IP (the rate-limit plugin is opt-in).
+  const { claims } = buildConfig();
+  const orgWriteRateLimit = {
+    rateLimit: { max: claims.writeRateLimitMax, timeWindow: claims.writeRateLimitWindow },
+  };
+
   // Create a new organization
   fastify.post<{ Body: CreateOrgBody }>('/api/v1/orgs', {
-    preHandler: [fastify.authenticate],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, rejectOversizedJson],
+    config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Register a new organization (creates index record)',
@@ -314,6 +364,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         201: INDEX_RECORD_SCHEMA,
         409: apiErrorSchema,
         400: apiErrorSchema,
+        403: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
@@ -324,14 +375,26 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     const invalid = validateCreateBody(body, path);
     if (invalid) return reply.code(invalid.status).send(invalid.body);
 
+    if (isReservedOrgId(body.org_id) && !(await isOperator(user.userId))) {
+      return reply.code(400).send({ error: 'RESERVED_ORG_ID', detail: `org_id "${body.org_id}" is reserved — choose another` });
+    }
+
     const profile = buildProfileOrError(body, path);
     if ('status' in profile) return reply.code(profile.status).send(profile.body);
 
-    if (await findByOrgId(body.org_id)) {
-      return reply.code(409).send({ error: 'CONFLICT', detail: `org_id "${body.org_id}" is already taken` });
+    const claims = buildConfig().claims;
+    if (await countUnprovenOrgsForUser(user.userId, claims.unprovenSlugHoldHours) >= claims.maxUnprovenPerUser) {
+      return reply.code(429).send({
+        error: 'TOO_MANY_UNVERIFIED',
+        detail: `you already have ${claims.maxUnprovenPerUser} unverified registrations — verify or delete one first`,
+      });
     }
+    // Every check that can refuse runs before an expired slug holder is
+    // released, so a request that fails never destroys someone else's claim.
     const conflict = await findConflict(profile.identifier, body.domain ?? null);
     if (conflict) return reply.code(conflict.status).send(conflict.body);
+    const slugConflict = await findSlugConflict(body.org_id);
+    if (slugConflict) return reply.code(slugConflict.status).send(slugConflict.body);
 
     const verifyToken = randomBytes(32).toString('hex');
     const verifyTokenExpiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
@@ -403,12 +466,13 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     return reply.send(toIndexRecord(org));
   });
 
-  // Issue (or rotate) a DNS TXT challenge for the org's domain
+  // Issue a DNS TXT challenge for the org's domain, or return the unexpired one
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/domain-challenge', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Issue a DNS TXT challenge to prove domain ownership',
+      description: 'Returns the outstanding challenge while it is unexpired; a new one is issued only after expiry or a domain change.',
       params: {
         type: 'object',
         required: ['org_id'],
@@ -416,6 +480,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
       response: {
         200: DOMAIN_CHALLENGE_SCHEMA,
+        400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
       },
@@ -426,26 +491,30 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
-    const token = randomBytes(32).toString('hex');
+    if (!org.domain) {
+      return reply.code(400).send({ error: 'NO_DOMAIN', detail: 'this org has no domain to verify (personal email-identity org)' });
+    }
+
+    const candidate = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
 
-    const updated = await setDomainChallenge(org.orgId, token, expiresAt);
-    if (!updated) {
+    const updated = await issueDomainChallenge(org.orgId, candidate, expiresAt);
+    if (!updated?.domain || !updated.domainChallenge || !updated.domainChallengeExpiresAt) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
     return reply.send({
       domain:       updated.domain,
-      record_name:  challengeRecordName(updated.domain!),
+      record_name:  challengeRecordName(updated.domain),
       record_type:  'TXT',
-      record_value: challengeRecordValue(token),
-      expires_at:   expiresAt.toISOString(),
+      record_value: challengeRecordValue(updated.domainChallenge),
+      expires_at:   updated.domainChallengeExpiresAt.toISOString(),
     });
   });
 
   // Check the DNS TXT record and, on success, mark the domain verified + activate
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/verify-domain', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Verify the DNS TXT challenge and activate the organization',
@@ -459,6 +528,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         400: apiErrorSchema,
         403: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
@@ -491,7 +561,16 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       });
     }
 
-    const updated = await markDomainVerified(org.orgId);
+    let updated: Organization | null;
+    try {
+      updated = await markDomainVerified(org.orgId);
+    } catch (err) {
+      // Another registrant proved this domain an instant earlier — first proof wins.
+      if (isUniqueViolation(err)) {
+        return reply.code(409).send({ error: 'CONFLICT', detail: `domain "${org.domain}" was verified by another registration` });
+      }
+      throw err;
+    }
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
@@ -501,7 +580,8 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Update own org's index record
   fastify.put<{ Params: { org_id: string }; Body: UpdateOrgBody }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin'), rejectUnknownUpdateFields],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectUnknownUpdateFields, rejectOversizedJson],
+    config: orgWriteRateLimit,
     schema: {
       tags: ['orgs'],
       summary: 'Update your organization\'s index record',
@@ -520,7 +600,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
-    const body = request.body;
+    const body = withoutBlankDomain(request.body);
     const current = await findByOrgId(request.params.org_id);
     if (!current) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
@@ -590,9 +670,53 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     return reply.send(toIndexRecord(updated));
   });
 
+  // Resend the contact-email verification link (the previous one stops working).
+  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/resend-verification', {
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
+    config: {
+      rateLimit: { max: buildConfig().auth.rateLimitMax, timeWindow: buildConfig().auth.rateLimitWindow },
+    },
+    schema: {
+      tags: ['orgs'],
+      summary: 'Send a new verification email for an org whose email is not yet verified',
+      params: {
+        type: 'object',
+        required: ['org_id'],
+        properties: { org_id: { type: 'string' } },
+      },
+      response: {
+        200: { type: 'object', required: ['sent'], properties: { sent: { type: 'boolean' } } },
+        403: apiErrorSchema,
+        404: apiErrorSchema,
+        409: apiErrorSchema,
+        429: apiErrorSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const org = await findByOrgId(request.params.org_id);
+    if (!org) {
+      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
+    }
+    if (org.emailVerified) {
+      return reply.code(409).send({ error: 'ALREADY_VERIFIED', detail: 'this email is already verified' });
+    }
+    const verifyToken = randomBytes(32).toString('hex');
+    const renewed = await renewVerifyToken(
+      org.orgId, verifyToken, new Date(Date.now() + VERIFY_TOKEN_TTL_MS), RESEND_COOLDOWN_MS,
+    );
+    if (!renewed) {
+      return reply.code(429).send({
+        error: 'RESEND_COOLDOWN',
+        detail: 'a verification email was sent less than a minute ago — check your inbox, or try again shortly',
+      });
+    }
+    await sendVerificationEmail(renewed.contactEmail, verifyToken, renewed.orgId);
+    return reply.send({ sent: true });
+  });
+
   // Suspend org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/suspend', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Suspend your organization',
@@ -618,7 +742,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Reactivate a suspended org
   fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/reactivate', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin'), rejectIfTakenDown],
     schema: {
       tags: ['orgs'],
       summary: 'Reactivate a suspended organization',
@@ -631,11 +755,20 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
         200: INDEX_RECORD_SCHEMA,
         403: apiErrorSchema,
         404: apiErrorSchema,
+        409: apiErrorSchema,
       },
     },
   }, async (request, reply) => {
     const reactivated = await reactivateOrganization(request.params.org_id);
     if (!reactivated) {
+      const current = await findByOrgId(request.params.org_id);
+      // Taken down between the preHandler check and the UPDATE (its SQL guard).
+      if (current?.moderation === 'takedown') {
+        return reply.code(403).send(MODERATED_ERROR);
+      }
+      if (current) {
+        return reply.code(409).send({ error: 'NOT_SUSPENDED', detail: 'only a suspended organization can be reactivated' });
+      }
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
 
@@ -644,7 +777,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
   // Hard-delete org
   fastify.delete<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id', {
-    preHandler: [fastify.authenticate, requireOrgRole('admin')],
+    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount, requireOrgRole('admin')],
     schema: {
       tags: ['orgs'],
       summary: 'Permanently delete your organization',

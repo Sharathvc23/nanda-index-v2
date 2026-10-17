@@ -6,7 +6,7 @@ import Link from "next/link";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
-import { ApiError, createOrg } from "@/lib/nanda-api";
+import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { CatalogExtensions, HostingPath, IndexRecord } from "@/lib/nanda-types";
@@ -108,6 +108,28 @@ function validateStep1(form: FormState): Record<string, string> {
     }
   }
   return e;
+}
+
+/**
+ * Step-1 fields another registration already holds, as field → message, so a
+ * conflict surfaces before steps 2–3 are filled in. Fails open: if the check
+ * itself errors, registration still rejects a taken org_id or domain with 409.
+ */
+async function findTakenFields(form: FormState): Promise<Record<string, string>> {
+  const domain = form.hosting_path === "personal" ? undefined : form.domain.toLowerCase();
+  try {
+    const result = await checkAvailability({ org_id: form.org_id, domain });
+    return {
+      ...(result.org_id_available === false
+        ? { org_id: `"${form.org_id}" is already taken. Choose another Org ID.` }
+        : {}),
+      ...(result.domain_available === false
+        ? { domain: `${domain} is already registered and verified by another entry, and each domain holds one entry. Use a subdomain, e.g. agents.${domain}.` }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
 }
 
 function validateStep2(form: FormState): Record<string, string> {
@@ -320,17 +342,25 @@ export default function NewOrgPage() {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
+  // org_id / domain values another registration holds, from the step-1 check.
+  const [taken, setTaken] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+  const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
   const [created, setCreated] = useState<IndexRecord | null>(null);
 
-  const patch = (key: keyof FormState, val: string) => setForm((f) => ({ ...f, [key]: val }));
+  const patch = (key: keyof FormState, val: string) => {
+    setForm((f) => ({ ...f, [key]: val }));
+    // Editing a field invalidates its "already taken" result.
+    setTaken((t) => (key in t ? Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)) : t));
+  };
   const touch = (...keys: string[]) =>
     setTouched((t) => Object.fromEntries([...Object.entries(t), ...keys.map((k) => [k, true])]));
 
   const s1Errors = validateStep1(form);
   const s2Errors = validateStep2(form);
   const s3Errors = validateStep3(form);
-  const allErrors = { ...s1Errors, ...s2Errors, ...s3Errors };
+  const allErrors = { ...taken, ...s1Errors, ...s2Errors, ...s3Errors };
   const visible = (key: string) => (touched[key] ? allErrors[key] : undefined);
 
   const isPersonal = form.hosting_path === "personal";
@@ -347,12 +377,18 @@ export default function NewOrgPage() {
     setForm((f) => ({ ...f, hosting_path: v, identifier: "" }));
   }
 
-  function advanceTo2() {
+  async function advanceTo2() {
     const fields = isPersonal
       ? ["org_id", "display_name", "identity_email"]
       : ["org_id", "display_name", "domain"];
     touch(...fields);
-    if (fields.every((f) => !s1Errors[f])) setStep(2);
+    if (fields.some((f) => s1Errors[f])) return;
+
+    setChecking(true);
+    const conflicts = await findTakenFields(form);
+    setChecking(false);
+    setTaken(conflicts);
+    if (Object.keys(conflicts).length === 0) setStep(2);
   }
 
   function advanceTo3() {
@@ -403,6 +439,7 @@ export default function NewOrgPage() {
       });
       setCreated(record);
     } catch (err) {
+      setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
     } finally {
       setSaving(false);
@@ -424,7 +461,9 @@ export default function NewOrgPage() {
       {/* ── Step 1: Identity ──────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="mx-auto max-w-lg space-y-5">
-          <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm space-y-4">
+          {/* Locked while the availability check runs, so its result can't land on edited values. */}
+          <fieldset disabled={checking}
+            className="min-w-0 rounded-3xl border border-black/10 bg-white p-6 shadow-sm space-y-4">
             <div>
               <h2 className="font-serif text-xl italic text-slate-950">Identity</h2>
               <p className="mt-0.5 text-xs text-slate-500">Choose who you are and how you publish agents.</p>
@@ -484,11 +523,12 @@ export default function NewOrgPage() {
                   </p>
                 </div>
               )}
-          </div>
+          </fieldset>
 
           <div className="flex gap-3">
-            <button onClick={advanceTo2} className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white">
-              Continue →
+            <button onClick={advanceTo2} disabled={checking}
+              className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white disabled:opacity-60">
+              {checking ? "Checking…" : "Continue →"}
             </button>
             <button onClick={() => router.back()}
               className="rounded-2xl border border-black/10 bg-white px-6 py-3 text-sm font-medium text-slate-700">
@@ -715,7 +755,17 @@ export default function NewOrgPage() {
           </div>
 
           {apiError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{apiError}</div>
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {apiError}
+              {needsAccountVerification && (
+                <>
+                  {" "}
+                  <Link href="/dashboard" className="font-medium underline">
+                    Go to your dashboard
+                  </Link>
+                </>
+              )}
+            </div>
           )}
 
           <div className="flex gap-3">

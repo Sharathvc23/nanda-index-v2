@@ -114,6 +114,71 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // ── Re-requesting returns the outstanding challenge ──────────────────────────
+
+  it('returns the same unexpired challenge on repeat requests instead of rotating it', async () => {
+    await createOrg(fastify, adminToken, 'dv-reuse');
+
+    const first = (await requestChallenge(fastify, adminToken, 'dv-reuse')).json();
+    const second = (await requestChallenge(fastify, adminToken, 'dv-reuse')).json();
+
+    expect(second.record_value).toBe(first.record_value);
+    expect(second.expires_at).toBe(first.expires_at);
+  });
+
+  it('verifies against the record published before the page was reloaded', async () => {
+    await createOrg(fastify, adminToken, 'dv-reload');
+    const published = (await requestChallenge(fastify, adminToken, 'dv-reload')).json();
+    resolveTxtMock.mockResolvedValue([[published.record_value]]);
+
+    // The user comes back after editing DNS; the page asks for the challenge again.
+    await requestChallenge(fastify, adminToken, 'dv-reload');
+
+    const res = await verifyDomain(fastify, adminToken, 'dv-reload');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().domain_verified).toBe(true);
+  });
+
+  it('issues a fresh challenge once the previous one has expired', async () => {
+    await createOrg(fastify, adminToken, 'dv-expired');
+    const stale = (await requestChallenge(fastify, adminToken, 'dv-expired')).json();
+    await getSql()`UPDATE organizations SET domain_challenge_expires_at = NOW() - INTERVAL '1 minute'
+                   WHERE org_id = 'dv-expired'`;
+
+    const fresh = (await requestChallenge(fastify, adminToken, 'dv-expired')).json();
+
+    expect(fresh.record_value).not.toBe(stale.record_value);
+    expect(new Date(fresh.expires_at).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('hands concurrent requests the same challenge', async () => {
+    await createOrg(fastify, adminToken, 'dv-race');
+
+    const responses = await Promise.all([
+      requestChallenge(fastify, adminToken, 'dv-race'),
+      requestChallenge(fastify, adminToken, 'dv-race'),
+      requestChallenge(fastify, adminToken, 'dv-race'),
+    ]);
+    const values = new Set(responses.map((r) => r.json().record_value));
+
+    expect(values.size).toBe(1);
+  });
+
+  it('issues a challenge for the new domain after the domain is changed', async () => {
+    await createOrg(fastify, adminToken, 'dv-moved');
+    const old = (await requestChallenge(fastify, adminToken, 'dv-moved')).json();
+    await fastify.inject({
+      method: 'PUT', url: '/api/v1/orgs/dv-moved',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { domain: 'dv-moved-new.example.com' },
+    });
+
+    const next = (await requestChallenge(fastify, adminToken, 'dv-moved')).json();
+
+    expect(next.record_name).toBe('_nanda-challenge.dv-moved-new.example.com');
+    expect(next.record_value).not.toBe(old.record_value);
+  });
+
   // ── POST /verify-domain ──────────────────────────────────────────────────────
 
   it('verifies the domain and activates the org when the TXT record matches', async () => {
@@ -184,6 +249,22 @@ describe('Domain ownership verification — DNS TXT challenge', () => {
 
     const res = await requestChallenge(fastify, memberToken, 'dv-nonmember');
     expect(res.statusCode).toBe(403);
+  });
+
+  it('refuses a challenge for a personal org, which has no domain to prove (400)', async () => {
+    await fastify.inject({
+      method: 'POST', url: '/api/v1/orgs',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        org_id: 'dv-personal', display_name: 'Personal', hosting_path: 'personal',
+        contact_email: 'dv-personal@example.com',
+        registry_url: 'https://agentcards.host39.org/personal/dv-personal@example.com/card.json',
+      },
+    });
+
+    const res = await requestChallenge(fastify, adminToken, 'dv-personal');
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('NO_DOMAIN');
   });
 
   // ── Changing the domain invalidates a prior verification ─────────────────────

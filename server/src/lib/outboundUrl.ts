@@ -1,5 +1,7 @@
-import { BlockList, isIP } from 'node:net';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import type { LookupAddress, LookupOptions } from 'node:dns';
 import { lookup as dnsLookup } from 'node:dns/promises';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 /**
  * SSRF guard for server-side fetches of registrant-controlled URLs (e.g. a
@@ -8,8 +10,11 @@ import { lookup as dnsLookup } from 'node:dns/promises';
  * resolves to — is publicly routable. Callers must also refuse redirects, or
  * a public host could bounce the request to an internal one.
  *
- * Residual risk: DNS can change between this check and the connection
- * (rebinding). Closing that fully needs connect-time address pinning.
+ * DNS rebinding: checking the name and then letting fetch resolve it again
+ * leaves a window where a hostile DNS server answers public for the check and
+ * private for the connection. So a guard does not just approve a URL — it
+ * hands back a fetch whose connections are pinned to the addresses it checked
+ * (see pinnedFetch); the hostname is never resolved a second time.
  */
 
 export class OutboundUrlError extends Error {
@@ -22,7 +27,30 @@ export class OutboundUrlError extends Error {
 /** Resolves a hostname to all of its IP addresses. Injectable for tests. */
 export type HostLookup = (hostname: string) => Promise<string[]>;
 
-export type UrlGuard = (url: string) => Promise<void>;
+/** The slice of a fetch Response that outbound callers use. */
+export interface OutboundResponse {
+  ok: boolean;
+  status: number;
+  /** Used to refuse an oversized body before reading it (remoteEntry.readCappedJson). */
+  headers: { get(name: string): string | null };
+  /** Read incrementally so a remote registry cannot make us buffer an unbounded body. */
+  body: AsyncIterable<Uint8Array> | null;
+  json(): Promise<unknown>;
+}
+
+export interface OutboundInit {
+  signal?: AbortSignal;
+  redirect?: 'error' | 'manual' | 'follow';
+}
+
+export type OutboundFetch = (url: string, init?: OutboundInit) => Promise<OutboundResponse>;
+
+/**
+ * Checks a URL and returns the fetch to use for it. Throws OutboundUrlError
+ * when the URL must not be fetched. The returned fetch is only valid for the
+ * URL that was checked.
+ */
+export type UrlGuard = (url: string) => Promise<OutboundFetch>;
 
 const BLOCKED = new BlockList();
 for (const [network, prefix] of [
@@ -66,7 +94,11 @@ function isBlockedAddress(address: string): boolean {
 const defaultLookup: HostLookup = async (hostname) =>
   (await dnsLookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
 
-export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<void> {
+/**
+ * Validates `rawUrl` as above and returns the public addresses its host
+ * resolved to — the only addresses a connection to it may then use.
+ */
+export async function resolvePublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<string[]> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -92,9 +124,66 @@ export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = d
   if (addresses.length === 0 || addresses.some(isBlockedAddress)) {
     throw new OutboundUrlError(`refusing to fetch "${rawUrl}": host ${host} resolves to a non-public address`);
   }
+  return addresses;
 }
 
-/** Guard used when OUTBOUND_ALLOW_PRIVATE_HOSTS is set (local development only). */
-export const allowAnyUrl: UrlGuard = async () => {};
+export async function assertPublicHttpUrl(rawUrl: string, lookup: HostLookup = defaultLookup): Promise<void> {
+  await resolvePublicHttpUrl(rawUrl, lookup);
+}
 
-export const publicUrlGuard: UrlGuard = (url) => assertPublicHttpUrl(url);
+/**
+ * A connect-time lookup (net.connect's `lookup` option) that answers every
+ * hostname with the given, already-validated addresses and never consults
+ * DNS. If none match a requested family it fails instead of falling back.
+ */
+export function pinnedLookup(addresses: readonly string[]): LookupFunction {
+  const entries = addresses.map((address) => ({ address, family: isIP(address) }));
+  return ((hostname: string, options: LookupOptions, callback: PinnedLookupCallback) => {
+    const family = options.family === 'IPv4' ? 4 : options.family === 'IPv6' ? 6 : options.family;
+    const usable = family === 4 || family === 6 ? entries.filter((e) => e.family === family) : entries;
+    if (usable.length === 0) {
+      const err: NodeJS.ErrnoException = new Error(`no pinned IPv${family} address for ${hostname}`);
+      err.code = 'ENOTFOUND';
+      callback(err, '', 0);
+      return;
+    }
+    if (options.all) callback(null, usable);
+    else callback(null, usable[0]!.address, usable[0]!.family);
+  }) as LookupFunction;
+}
+
+type PinnedLookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  addressOrAll: string | LookupAddress[],
+  family?: number,
+) => void;
+
+/**
+ * A fetch whose connections go only to `addresses`. Each call gets its own
+ * short-lived undici Agent so the pin can't leak into other requests; the
+ * agent is closed once the response is in (close lets the body finish).
+ */
+export function pinnedFetch(addresses: readonly string[]): OutboundFetch {
+  return async (url, init) => {
+    const dispatcher = new Agent({ connect: { lookup: pinnedLookup(addresses) } });
+    try {
+      const res = await undiciFetch(url, { ...init, dispatcher });
+      void dispatcher.close().catch(() => {});
+      return res;
+    } catch (err) {
+      void dispatcher.destroy().catch(() => {});
+      throw err;
+    }
+  };
+}
+
+/** Builds the public-only guard around a given resolver (injectable for tests). */
+export function publicUrlGuardWith(lookup: HostLookup): UrlGuard {
+  return async (url) => pinnedFetch(await resolvePublicHttpUrl(url, lookup));
+}
+
+/** Guard used when OUTBOUND_ALLOW_PRIVATE_HOSTS is set (local development only).
+ *  Uses the global fetch, read at call time, so tests can stub it. */
+export const allowAnyUrl: UrlGuard = async () => (url, init) => globalThis.fetch(url, init);
+
+export const publicUrlGuard: UrlGuard = publicUrlGuardWith(defaultLookup);

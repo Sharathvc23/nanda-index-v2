@@ -1,10 +1,10 @@
 import type postgres from 'postgres';
 import { getSql } from '../client.js';
-import { DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
+import { CATALOG_MEDIA_TYPES, DEFAULT_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, NANDA_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../../lib/mediaTypes.js';
 
 /** Postgres type OID for `text` — the element type of org_id arrays bound as parameters. */
 const TEXT_OID = 25;
-import type { IndexRecord, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
+import type { IndexRecord, Moderation, PublisherBlock, TrustManifest } from '../../types/api/index-record.js';
 import { NANDA_EXTENSION, type CatalogExtensions } from '../../lib/entryProfile.js';
 import type { IndexEntry } from '../../types/api/index-entry.js';
 
@@ -23,6 +23,8 @@ export interface Organization {
   domainChallenge: string | null;
   domainChallengeExpiresAt: Date | null;
   domainVerifiedAt: Date | null;
+  /** Ownership was proven at least once; never cleared, even if proof is later lost. */
+  everProven: boolean;
   ttlSeconds: number;
   status: 'pending' | 'active' | 'suspended';
   createdAt: Date;
@@ -43,6 +45,8 @@ export interface Organization {
    *  "help me bake" vs a "bakery" tag). Empty when enrichment isn't configured
    *  or hasn't run for this org yet. */
   representativeQueries: string[];
+  /** Operator moderation (migration 017) — independent of owner-set status. */
+  moderation: Moderation;
 }
 
 export interface InsertOrgParams {
@@ -109,7 +113,11 @@ export function toIndexRecord(org: Organization): IndexRecord {
     data:           org.entryData ?? undefined,
     version:        org.version ?? undefined,
     trust_manifest: org.trustManifest ?? undefined,
+    // The manifest is whatever the registrant submitted; nothing in it has
+    // been checked, so say so next to it rather than let it read as vetted.
+    ...(org.trustManifest ? { trust_manifest_verified: false } : {}),
     representative_queries: org.representativeQueries.length > 0 ? org.representativeQueries : undefined,
+    moderation:     org.moderation,
   };
 }
 
@@ -129,7 +137,8 @@ export function toIndexEntry(org: Organization): IndexEntry {
     tags:        org.tags,
     ...(org.version ? { version: org.version } : {}),
     ...(org.publisher ? { publisher: org.publisher } : {}),
-    ...(org.trustManifest ? { trustManifest: org.trustManifest } : {}),
+    // Self-asserted by the registrant and not verified by the index.
+    ...(org.trustManifest ? { trustManifest: org.trustManifest, trustManifestVerified: false } : {}),
     updatedAt:   org.updatedAt.toISOString(),
     extensions: {
       ...org.extensions,
@@ -167,9 +176,70 @@ export async function findByOrgId(orgId: string): Promise<Organization | null> {
 export async function findByDomain(domain: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
-    SELECT * FROM organizations WHERE lower(domain) = lower(${domain}) LIMIT 1
+    SELECT * FROM organizations WHERE lower(domain) = lower(${domain})
+    ORDER BY domain_verified DESC, created_at ASC
+    LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+/**
+ * Whether an org's ownership proof holds: a domain entry needs its domain
+ * verified, a personal (domain-less) entry its email. Only proven rows may be
+ * published, and only proven rows reserve a domain or identifier.
+ */
+export function isProven(org: Pick<Organization, 'domain' | 'domainVerified' | 'emailVerified'>): boolean {
+  return org.domain !== null ? org.domainVerified : org.emailVerified;
+}
+
+/** The proven org holding this domain, if any — the only kind that blocks others. */
+export async function findProvenByDomain(domain: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE lower(domain) = lower(${domain}) AND domain_verified
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/** The proven org holding this identifier, if any — the only kind that blocks others. */
+export async function findProvenByIdentifier(identifier: string): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    SELECT * FROM organizations
+    WHERE identifier = ${identifier}
+      AND ((domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified))
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * How many fresh unproven claims a user holds: never-proven orgs they
+ * administer that are still inside the slug hold period. Expired claims don't
+ * count, so abandoned registrations cannot lock their owner out of new ones.
+ */
+export async function countUnprovenOrgsForUser(userId: string, holdHours: number): Promise<number> {
+  const sql = getSql();
+  const rows = await sql<{ count: string }[]>`
+    SELECT count(*) AS count
+    FROM organizations o
+    JOIN org_memberships m ON m.org_id = o.org_id
+    WHERE m.user_id = ${userId} AND m.role = 'admin'
+      AND NOT o.ever_proven
+      AND o.created_at > NOW() - make_interval(hours => ${holdHours})
+  `;
+  return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Serialises proofs of the same domain or identifier: two registrants proving
+ * at the same instant would otherwise each lock the row the other deletes, and
+ * Postgres aborts one with a deadlock instead of a clean unique conflict.
+ */
+async function lockClaim(tx: postgres.TransactionSql, key: string): Promise<void> {
+  await tx`SELECT pg_advisory_xact_lock(hashtext(${`nanda-claim:${key}`}))`;
 }
 
 /**
@@ -179,7 +249,10 @@ export async function findByDomain(domain: string): Promise<Organization | null>
 export async function findByIdentifier(identifier: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
-    SELECT * FROM organizations WHERE identifier = ${identifier} LIMIT 1
+    SELECT * FROM organizations WHERE identifier = ${identifier}
+    ORDER BY ((domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified)) DESC,
+             created_at ASC
+    LIMIT 1
   `;
   return rows[0] ?? null;
 }
@@ -197,16 +270,33 @@ export async function findByUserId(userId: string): Promise<Organization[]> {
   `;
 }
 
+export interface ListedPage {
+  rows: Organization[];
+  /** Listed entries in total, independent of limit/offset. */
+  total: number;
+}
+
 /**
- * Returns all active organizations ordered by creation date.
+ * One page of listed entries — active and not moderated (every listing and
+ * search below applies the same `moderation = 'none'` filter; hidden and
+ * taken-down entries never appear in one). Ordered by creation date, with
+ * org_id as a tie-breaker so offsets page deterministically.
  */
-export async function findAllActive(): Promise<Organization[]> {
+export async function listListedEntries(limit: number, offset: number): Promise<ListedPage> {
   const sql = getSql();
-  return sql<Organization[]>`
-    SELECT * FROM organizations
-    WHERE status = 'active'
-    ORDER BY created_at ASC
-  `;
+  const [rows, counted] = await Promise.all([
+    sql<Organization[]>`
+      SELECT * FROM organizations
+      WHERE status = 'active' AND moderation = 'none'
+      ORDER BY created_at ASC, org_id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `,
+    sql<{ total: string }[]>`
+      SELECT COUNT(*)::text AS total FROM organizations
+      WHERE status = 'active' AND moderation = 'none'
+    `,
+  ]);
+  return { rows, total: Number(counted[0]?.total ?? 0) };
 }
 
 /**
@@ -315,28 +405,79 @@ export async function updateOrganization(
  */
 export async function markEmailVerifiedByToken(token: string): Promise<Organization | null> {
   const sql = getSql();
+  return sql.begin(async (tx) => {
+    const [target] = await tx<{ identifier: string }[]>`
+      SELECT identifier FROM organizations WHERE verify_token = ${token}
+    `;
+    if (target) await lockClaim(tx, target.identifier);
+    const rows = await tx<Organization[]>`
+      UPDATE organizations SET
+        ever_proven              = (ever_proven OR domain IS NULL),
+        email_verified           = TRUE,
+        verify_token             = NULL,
+        verify_token_expires_at  = NULL,
+        status = CASE
+          WHEN domain IS NULL AND status = 'pending' THEN 'active'
+          ELSE status END,
+        updated_at               = NOW()
+      WHERE verify_token = ${token}
+        AND verify_token_expires_at > NOW()
+      RETURNING *
+    `;
+    const org = rows[0] ?? null;
+    // A personal identifier is now proven: competing unproven claims on the
+    // same email lose, so a squatter's earlier registration cannot linger.
+    if (org && org.domain === null) {
+      await tx`
+        DELETE FROM organizations
+        WHERE identifier = ${org.identifier} AND org_id <> ${org.orgId}
+          AND domain IS NULL AND NOT email_verified
+      `;
+    }
+    return org;
+  }) as Promise<Organization | null>;
+}
+
+/**
+ * Issues a fresh email verification token for an org whose email is not yet
+ * verified (the previous link stops working). Refused while the previous link
+ * was issued less than `cooldownMs` ago, so resend cannot flood an inbox.
+ * Returns null if org_id not found, the email is verified, or in cooldown.
+ */
+export async function renewVerifyToken(
+  orgId: string,
+  token: string,
+  expiresAt: Date,
+  cooldownMs: number,
+): Promise<Organization | null> {
+  const sql = getSql();
+  // Tokens share one TTL, so "previous link issued within the cooldown" is
+  // "previous expiry later than this one's minus the cooldown".
+  const latestPreviousExpiry = new Date(expiresAt.getTime() - cooldownMs);
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      email_verified           = TRUE,
-      verify_token             = NULL,
-      verify_token_expires_at  = NULL,
-      status = CASE
-        WHEN domain IS NULL AND status = 'pending' THEN 'active'
-        ELSE status END,
-      updated_at               = NOW()
-    WHERE verify_token = ${token}
-      AND verify_token_expires_at > NOW()
+      verify_token            = ${token},
+      verify_token_expires_at = ${expiresAt},
+      updated_at              = NOW()
+    WHERE org_id = ${orgId} AND NOT email_verified
+      AND (verify_token_expires_at IS NULL OR verify_token_expires_at <= ${latestPreviousExpiry})
     RETURNING *
   `;
   return rows[0] ?? null;
 }
 
 /**
- * Stores (or replaces) the pending DNS TXT challenge for an org's domain.
- * Regenerating invalidates any previously issued challenge. Returns null if
+ * Returns the org with its outstanding DNS TXT challenge, storing `challenge`
+ * only when there is none or the previous one has expired. A live challenge is
+ * never rotated: the admin may already have published it at their DNS host,
+ * and replacing it would silently invalidate that record. Returns null if
  * org_id not found.
+ *
+ * The liveness check sits in the UPDATE's WHERE so it is atomic: a concurrent
+ * request blocked on the row lock re-checks it against the winner's row,
+ * matches nothing, and falls through to read the challenge just issued.
  */
-export async function setDomainChallenge(
+export async function issueDomainChallenge(
   orgId: string,
   challenge: string,
   expiresAt: Date,
@@ -348,9 +489,12 @@ export async function setDomainChallenge(
       domain_challenge_expires_at = ${expiresAt},
       updated_at                  = NOW()
     WHERE org_id = ${orgId}
+      AND (domain_challenge IS NULL
+           OR domain_challenge_expires_at IS NULL
+           OR domain_challenge_expires_at <= NOW())
     RETURNING *
   `;
-  return rows[0] ?? null;
+  return rows[0] ?? findByOrgId(orgId);
 }
 
 /**
@@ -361,23 +505,41 @@ export async function setDomainChallenge(
  */
 export async function markDomainVerified(orgId: string): Promise<Organization | null> {
   const sql = getSql();
-  const rows = await sql<Organization[]>`
-    UPDATE organizations SET
-      domain_verified             = TRUE,
-      domain_verified_at          = NOW(),
-      domain_challenge            = NULL,
-      domain_challenge_expires_at = NULL,
-      status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
-      updated_at                  = NOW()
-    WHERE org_id = ${orgId}
-    RETURNING *
-  `;
-  return rows[0] ?? null;
+  return sql.begin(async (tx) => {
+    const [target] = await tx<{ domain: string | null }[]>`
+      SELECT domain FROM organizations WHERE org_id = ${orgId}
+    `;
+    if (target?.domain) await lockClaim(tx, `domain:${target.domain.toLowerCase()}`);
+    const rows = await tx<Organization[]>`
+      UPDATE organizations SET
+        ever_proven                 = TRUE,
+        domain_verified             = TRUE,
+        domain_verified_at          = NOW(),
+        domain_challenge            = NULL,
+        domain_challenge_expires_at = NULL,
+        status                      = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+        updated_at                  = NOW()
+      WHERE org_id = ${orgId}
+      RETURNING *
+    `;
+    const org = rows[0] ?? null;
+    // First proof wins: every unproven claim on this domain is removed, so
+    // registering a domain you do not control cannot block its owner.
+    if (org?.domain) {
+      await tx`
+        DELETE FROM organizations
+        WHERE lower(domain) = lower(${org.domain}) AND org_id <> ${org.orgId}
+          AND NOT domain_verified
+      `;
+    }
+    return org;
+  }) as Promise<Organization | null>;
 }
 
 /**
- * Sets an organization's status to 'suspended'.
- * Returns null if org_id not found.
+ * Sets an organization's status to 'suspended'. A taken-down entry is left
+ * untouched (the route refuses it first; the predicate is the race backstop).
+ * Returns null if org_id not found or taken down.
  */
 export async function suspendOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
@@ -385,7 +547,7 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
     UPDATE organizations SET
       status     = 'suspended',
       updated_at = NOW()
-    WHERE org_id = ${orgId}
+    WHERE org_id = ${orgId} AND moderation <> 'takedown'
     RETURNING *
   `;
   return rows[0] ?? null;
@@ -393,21 +555,56 @@ export async function suspendOrganization(orgId: string): Promise<Organization |
 
 /**
  * Reactivates a suspended organization. It returns to 'active' only when its
- * ownership proof still holds — a domain org whose domain is unverified (e.g.
- * the domain was changed while suspended) goes back to 'pending' instead, so
- * suspend → change domain → reactivate cannot bypass the DNS challenge.
- * Returns null if org_id not found.
+ * ownership proof holds (domain verified, or for a personal entry its email);
+ * otherwise it goes back to 'pending'. Neither suspend → change domain →
+ * reactivate nor suspend → reactivate of a never-verified personal entry can
+ * publish anything. Only a suspended org can be reactivated, and a taken-down
+ * entry is never reactivated by its owner.
+ * Returns null if org_id not found, the org is not suspended, or taken down.
  */
 export async function reactivateOrganization(orgId: string): Promise<Organization | null> {
   const sql = getSql();
   const rows = await sql<Organization[]>`
     UPDATE organizations SET
-      status     = CASE WHEN domain IS NOT NULL AND NOT domain_verified THEN 'pending' ELSE 'active' END,
+      status     = CASE
+        WHEN (domain IS NOT NULL AND domain_verified) OR (domain IS NULL AND email_verified) THEN 'active'
+        ELSE 'pending' END,
       updated_at = NOW()
+    WHERE org_id = ${orgId} AND status = 'suspended' AND moderation <> 'takedown'
+    RETURNING *
+  `;
+  return rows[0] ?? null;
+}
+
+/**
+ * Sets an entry's operator moderation. Leaves `status` and updated_at alone:
+ * moderation is the operator's axis, and updated_at drives catalog-probe
+ * order, which an operator action should not reshuffle.
+ * Returns null if org_id not found.
+ */
+export async function setModeration(orgId: string, moderation: Moderation): Promise<Organization | null> {
+  const sql = getSql();
+  const rows = await sql<Organization[]>`
+    UPDATE organizations SET moderation = ${moderation}
     WHERE org_id = ${orgId}
     RETURNING *
   `;
   return rows[0] ?? null;
+}
+
+/**
+ * Sets moderation on every entry whose org_id starts with `prefix` (a literal
+ * prefix — starts_with, not LIKE, so `_` and `%` match only themselves).
+ * Returns the affected org_ids, sorted.
+ */
+export async function setModerationByPrefix(prefix: string, moderation: Moderation): Promise<string[]> {
+  const sql = getSql();
+  const rows = await sql<{ orgId: string }[]>`
+    UPDATE organizations SET moderation = ${moderation}
+    WHERE starts_with(org_id, ${prefix})
+    RETURNING org_id
+  `;
+  return rows.map((r) => r.orgId).sort();
 }
 
 /**
@@ -422,23 +619,36 @@ export async function deleteOrganization(orgId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** Escapes LIKE wildcards so user input matches literally. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 /**
- * Full-text keyword search across org_id, domain, and display_name.
- * Returns active organizations matching the query.
+ * Keyword search over active organizations: a substring match on org_id,
+ * domain, display_name and identifier, plus a full-text match on what the
+ * entry describes (tags, description, representative queries — the
+ * search_vector column). Exact org_id/identifier matches rank first, then by
+ * full-text relevance.
  */
 export async function searchOrganizations(query: string): Promise<Organization[]> {
   const sql = getSql();
-  const pattern = `%${query.toLowerCase()}%`;
+  const lowered = query.toLowerCase();
+  const pattern = `%${escapeLike(lowered)}%`;
   return sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
       AND (
-        LOWER(org_id)        LIKE ${pattern}
-        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern}
-        OR LOWER(display_name)              LIKE ${pattern}
-        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern}
+        LOWER(org_id)                       LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(display_name)              LIKE ${pattern} ESCAPE '\\'
+        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern} ESCAPE '\\'
+        OR search_vector @@ websearch_to_tsquery('english', ${query})
       )
-    ORDER BY org_id ASC
+    ORDER BY
+      (LOWER(org_id) = ${lowered} OR LOWER(COALESCE(identifier, '')) = ${lowered}) DESC,
+      ts_rank(search_vector, websearch_to_tsquery('english', ${query})) DESC,
+      org_id ASC
     LIMIT 50
   `;
 }
@@ -488,9 +698,11 @@ export async function rankOrganizationsForQuery(
     const rows = await sql<RankedOrganization[]>`
       SELECT o.*, ts_rank(search_vector, to_tsquery('english', ${orQuery})) AS rank
       FROM organizations o
-      WHERE status = 'active'
+      WHERE status = 'active' AND moderation = 'none'
         AND registry_url IS NOT NULL
         AND media_type <> ${POINTER_ONLY_MEDIA_TYPE}
+        -- Catalogs and registries are fanned out to / referred to: domain proof required.
+        AND (domain_verified OR media_type NOT IN (${NANDA_MEDIA_TYPE.AI_CATALOG}, ${NANDA_MEDIA_TYPE.AI_REGISTRY}))
         AND search_vector @@ to_tsquery('english', ${orQuery})
       ORDER BY rank DESC
       LIMIT ${limit}
@@ -501,6 +713,7 @@ export async function rankOrganizationsForQuery(
   const fallback = await searchOrganizations(query);
   return fallback
     .filter((o) => o.registryUrl != null && o.mediaType !== POINTER_ONLY_MEDIA_TYPE)
+    .filter((o) => o.domainVerified || !(CATALOG_MEDIA_TYPES as readonly string[]).includes(o.mediaType))
     .slice(0, limit)
     .map((o) => ({ ...o, rank: 0 }));
 }
@@ -521,9 +734,11 @@ export async function listCatalogsToProbe(
   const sql = getSql();
   const rows = await sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
       AND registry_url IS NOT NULL
       AND media_type = ${ENTERPRISE_MEDIA_TYPE}
+      -- Only a proven domain may be fanned out to on every search.
+      AND domain_verified
       AND NOT (org_id = ANY(${sql.array([...excludeOrgIds], TEXT_OID)}))
     ORDER BY updated_at DESC
     LIMIT ${limit}
@@ -588,7 +803,7 @@ export async function listOrganizationsPaged(
 
   const rows = await sql<Organization[]>`
     SELECT * FROM organizations
-    WHERE status = 'active' ${cursorClause} ${filterClause}
+    WHERE status = 'active' AND moderation = 'none' ${cursorClause} ${filterClause}
     ORDER BY org_id ASC
     LIMIT ${limit + 1}
   `;
@@ -613,7 +828,7 @@ export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT media_type AS value, COUNT(*)::text AS count
     FROM organizations
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
     GROUP BY media_type
     ORDER BY count DESC
   `;
@@ -626,7 +841,7 @@ export async function countOrgsByTag(): Promise<FacetBucket[]> {
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT t AS value, COUNT(*)::text AS count
     FROM organizations, unnest(tags) AS t
-    WHERE status = 'active'
+    WHERE status = 'active' AND moderation = 'none'
     GROUP BY t
     ORDER BY count DESC
   `;

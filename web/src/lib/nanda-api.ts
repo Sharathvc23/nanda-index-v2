@@ -10,6 +10,7 @@ import type {
   CreateOrgPayload,
   UpdateOrgPayload,
   DomainChallenge,
+  Availability,
 } from "./nanda-types";
 
 const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
@@ -17,13 +18,27 @@ const API_BASE = process.env.NEXT_PUBLIC_NANDA_INDEX_API_URL ?? "";
 export class ApiError extends Error {
   status: number;
   payload?: unknown;
+  /** Machine-readable `error` field from the API body, when present. */
+  code: string | null;
 
-  constructor(message: string, status: number, payload?: unknown) {
+  constructor(message: string, status: number, payload?: unknown, code: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
+    this.code = code;
   }
+}
+
+/** Server code for org writes attempted before the account email is verified. */
+export const ACCOUNT_NOT_VERIFIED = "ACCOUNT_NOT_VERIFIED";
+
+export const ACCOUNT_NOT_VERIFIED_MESSAGE =
+  "Verify your email to register and manage agents. Use the link we emailed you, " +
+  "or resend it from your dashboard.";
+
+export function isAccountNotVerified(err: unknown): boolean {
+  return err instanceof ApiError && err.code === ACCOUNT_NOT_VERIFIED;
 }
 
 async function parseApiResponse<T>(res: Response): Promise<T> {
@@ -39,11 +54,14 @@ async function parseApiResponse<T>(res: Response): Promise<T> {
     const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
     const errorCode = typeof obj["error"] === "string" ? obj["error"] : null;
     const detail = typeof obj["detail"] === "string" ? obj["detail"] : null;
+    // The verification gate can hit any org write; give every screen the same
+    // human message instead of the raw code.
     const message =
+      errorCode === ACCOUNT_NOT_VERIFIED ? ACCOUNT_NOT_VERIFIED_MESSAGE :
       detail && errorCode ? `${errorCode} — ${detail}` :
       detail ?? errorCode ??
       (typeof obj["message"] === "string" ? obj["message"] : `Request failed with status ${res.status}`);
-    throw new ApiError(message, res.status, data);
+    throw new ApiError(message, res.status, data, errorCode);
   }
 
   return data as T;
@@ -71,9 +89,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return parseApiResponse<T>(res);
 }
 
-/** GET /api/v1/index — list all active entries (AI Catalog entry shape). */
+/** Largest page GET /api/v1/index serves (the server caps ?limit at 500). */
+const INDEX_PAGE_SIZE = 500;
+/** Stop paging after this many pages so a misbehaving server can't loop us forever. */
+const MAX_INDEX_PAGES = 20;
+
+/**
+ * GET /api/v1/index — every listed entry (AI Catalog entry shape). The
+ * endpoint is paged (?limit/&offset), so fetch pages until a short one
+ * comes back; Explore filters and paginates client-side over the full set.
+ */
 export async function listIndexRecords(): Promise<IndexCatalogEntry[]> {
-  return request<IndexCatalogEntry[]>("/api/v1/index");
+  let entries: IndexCatalogEntry[] = [];
+  for (let page = 0; page < MAX_INDEX_PAGES; page++) {
+    const params = new URLSearchParams({ limit: String(INDEX_PAGE_SIZE), offset: String(page * INDEX_PAGE_SIZE) });
+    const batch = await request<IndexCatalogEntry[]>(`/api/v1/index?${params}`);
+    entries = [...entries, ...batch];
+    if (batch.length < INDEX_PAGE_SIZE) break;
+  }
+  return entries;
 }
 
 /** GET /api/v1/index/:org_id — a single entry (AI Catalog entry shape). */
@@ -177,6 +211,25 @@ export async function resetPassword(token: string, password: string): Promise<vo
   });
 }
 
+/**
+ * POST /auth/verify-account — confirm the account email with the emailed token.
+ * Called on an explicit button press, never on page load (mail scanners
+ * prefetch links).
+ */
+export async function verifyAccount(token: string): Promise<void> {
+  await request<{ ok: boolean }>("/auth/verify-account", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** POST /auth/resend-account-verification — email a fresh verification link. */
+export async function resendAccountVerification(): Promise<{ ok: boolean; already_verified?: boolean }> {
+  return request<{ ok: boolean; already_verified?: boolean }>("/auth/resend-account-verification", {
+    method: "POST",
+  });
+}
+
 /** GET /api/v1/me — authenticated user profile + org memberships. */
 export async function getMe(): Promise<User> {
   return request<User>("/api/v1/me");
@@ -188,6 +241,14 @@ export async function createOrg(payload: CreateOrgPayload): Promise<IndexRecord>
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/** GET /api/v1/availability — whether an org_id and/or domain is still free (requires auth). */
+export async function checkAvailability(query: { org_id?: string; domain?: string }): Promise<Availability> {
+  const params = new URLSearchParams(
+    Object.entries(query).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  return request<Availability>(`/api/v1/availability?${params}`);
 }
 
 /** PUT /api/v1/orgs/:org_id — update an org (requires auth). */
@@ -222,6 +283,21 @@ export async function deleteOrg(orgId: string): Promise<void> {
 /** GET /api/v1/orgs/:org_id — get own org (requires auth + membership). */
 export async function getOrgAsOwner(orgId: string): Promise<IndexRecord> {
   return request<IndexRecord>(`/api/v1/orgs/${encodeURIComponent(orgId)}`);
+}
+
+/** POST /api/v1/verify-email — confirm a contact email with the emailed token. */
+export async function verifyEmail(token: string): Promise<IndexRecord> {
+  return request<IndexRecord>("/api/v1/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** POST /api/v1/orgs/:org_id/resend-verification — email a new verification link (admin). */
+export async function resendVerification(orgId: string): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>(`/api/v1/orgs/${encodeURIComponent(orgId)}/resend-verification`, {
+    method: "POST",
+  });
 }
 
 /** POST /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin). */

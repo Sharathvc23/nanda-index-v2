@@ -2,14 +2,16 @@ import type { FastifyInstance } from 'fastify';
 import { apiErrorSchema } from '../types/api/common.js';
 import { searchQuerySchema, searchResponseSchema } from '../types/api/search.js';
 import { searchOrgs } from '../services/search.js';
+import { publicReadRateLimit } from '../plugins/rateLimit.js';
 
 interface SearchQuerystring {
   q: string;
 }
 
-/** Keyword search across org_id, domain, and display_name. */
+/** Keyword search across names and identifiers, plus tags and descriptions. */
 export async function registerSearchRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Querystring: SearchQuerystring }>('/api/v1/search', {
+    config: publicReadRateLimit(),
     schema: {
       tags: ['search'],
       querystring: searchQuerySchema,

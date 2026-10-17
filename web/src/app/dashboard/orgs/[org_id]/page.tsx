@@ -7,10 +7,26 @@ import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { JsonPanel } from "@/components/JsonPanel";
 import { DomainVerification } from "@/components/DomainVerification";
-import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg } from "@/lib/nanda-api";
+import { ApiError, getOrgAsOwner, updateOrg, suspendOrg, reactivateOrg, deleteOrg, resendVerification } from "@/lib/nanda-api";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
-import type { IndexRecord } from "@/lib/nanda-types";
+import type { IndexRecord, Moderation } from "@/lib/nanda-types";
+
+const MODERATION_MESSAGES: Record<Exclude<Moderation, "none">, string> = {
+  hidden:
+    "An index operator has hidden this entry: it no longer appears in listings or search, but it still resolves by its exact identifier.",
+  takedown:
+    "An index operator has taken this entry down: it is not listed or resolvable, and it cannot be reactivated from here. Contact the NANDA Index operators to have it reviewed.",
+};
+
+/** Explains operator moderation to the owner — set by operators, not editable here. */
+function ModerationNotice({ moderation }: { moderation: Exclude<Moderation, "none"> }) {
+  return (
+    <div role="status" className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      {MODERATION_MESSAGES[moderation]}
+    </div>
+  );
+}
 
 export default function OrgDetailPage() {
   useRequireAuth();
@@ -27,6 +43,8 @@ export default function OrgDetailPage() {
   const [suspending, setSuspending] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [registryUrl, setRegistryUrl] = useState("");
@@ -58,14 +76,30 @@ export default function OrgDetailPage() {
     return () => { cancelled = true; };
   }, [orgId]);
 
+  async function onResend() {
+    setResending(true);
+    setError(null);
+    try {
+      await resendVerification(orgId);
+      setResent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not send the email. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   async function onSave() {
+    setError(null);
     setSaving(true);
     try {
       const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+      // Personal entries have no domain; send it only when the org has one and it changed.
+      const newDomain = domain.trim();
       const updated = await updateOrg(orgId, {
         display_name: displayName,
         registry_url: registryUrl || null,
-        domain,
+        ...(org?.domain && newDomain && newDomain !== org.domain ? { domain: newDomain } : {}),
         description: description || undefined,
         tags: tagList.length ? tagList : [],
         version: version || undefined,
@@ -133,7 +167,9 @@ export default function OrgDetailPage() {
     return <PageShell title={orgId} description="Loading…"><div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm text-sm text-slate-400">Loading…</div></PageShell>;
   }
 
-  if (error || !org) {
+  // Full-page error only when the org could not be loaded; errors from actions
+  // (save, suspend, …) are shown inline below so the page stays usable.
+  if (!org) {
     return (
       <PageShell title={orgId} description="">
         <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
@@ -146,6 +182,7 @@ export default function OrgDetailPage() {
   return (
     <PageShell title={org.display_name} description={`org_id: ${org.org_id}`}>
       <div className="space-y-6">
+        {org.moderation && org.moderation !== "none" && <ModerationNotice moderation={org.moderation} />}
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={org.status} />
           {org.domain && (
@@ -164,13 +201,24 @@ export default function OrgDetailPage() {
               Email verified
             </span>
           ) : (
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-700">
-              Email not verified — check your inbox
-            </span>
+            <>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-700">
+                Email not verified — check your inbox
+              </span>
+              <button
+                onClick={onResend}
+                disabled={resending || resent}
+                className="rounded-full border border-amber-300 bg-white px-3 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+              >
+                {resent ? "Email sent" : resending ? "Sending…" : "Resend email"}
+              </button>
+            </>
           )}
         </div>
 
-        {org.domain && <DomainVerification org={org} onVerified={setOrg} />}
+        {/* Keyed by domain: a domain change resets the panel, so it never shows
+            the previous domain's DNS record. */}
+        {org.domain && <DomainVerification key={org.domain} org={org} onVerified={setOrg} />}
 
         {editing ? (
           <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm space-y-4">
@@ -178,10 +226,12 @@ export default function OrgDetailPage() {
               <FieldLabel htmlFor={`${fid}-display-name`} label="Display Name" info={ORG_FIELD_HELP.display_name} />
               <input id={`${fid}-display-name`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={inputCls} />
             </div>
-            <div>
-              <FieldLabel htmlFor={`${fid}-domain`} label="Domain" info={ORG_FIELD_HELP.domain} />
-              <input id={`${fid}-domain`} value={domain} onChange={(e) => setDomain(e.target.value)} className={inputCls} />
-            </div>
+            {org.domain && (
+              <div>
+                <FieldLabel htmlFor={`${fid}-domain`} label="Domain" info={ORG_FIELD_HELP.domain} />
+                <input id={`${fid}-domain`} value={domain} onChange={(e) => setDomain(e.target.value)} className={inputCls} />
+              </div>
+            )}
             <div>
               <FieldLabel htmlFor={`${fid}-url`} label="Catalog / Agent Card URL" info={ORG_FIELD_HELP.registry_url} />
               <input id={`${fid}-url`} value={registryUrl} onChange={(e) => setRegistryUrl(e.target.value)} className={inputCls} placeholder="https://catalog.example.com" />
@@ -265,6 +315,10 @@ export default function OrgDetailPage() {
                 {reactivating ? "Reactivating…" : "Reactivate"}
               </button>
             </div>
+          ) : org.status === "pending" ? (
+            <p className="text-sm text-rose-700">
+              This organization is not public yet — it appears in the index once ownership is verified.
+            </p>
           ) : (
             <div className="flex items-center justify-between">
               <p className="text-sm text-rose-700">Suspending removes this org from public index results. You can reactivate it later.</p>

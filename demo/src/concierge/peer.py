@@ -68,6 +68,11 @@ class Peer:
 
     def open(self, *, agent_id: str, private_key: bytes, did: str) -> Peer:
         """Bind this agent's identity to the connection."""
+        # v0.2, not v0.3, although v0.2 covers neither method, path nor a nonce
+        # and so a captured request can be replayed within the timestamp window.
+        # The per-agent services verify only v0.2 — their cards publish the
+        # '{body}:{agent_id}:{timestamp}' format and refuse a v0.3 signature —
+        # so switching here would make every call fail. Move once they accept v0.3.
         self._client = httpx.Client(
             auth=AgentSignature(agent_id=agent_id, private_key=private_key, did=did, scheme=SCHEME_V02),
             follow_redirects=False,

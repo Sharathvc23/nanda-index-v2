@@ -1,6 +1,7 @@
 import type { RankedOrganization } from '../db/queries/organizations.js';
 import { ARD_FINDER_MEDIA_TYPE, ENTERPRISE_MEDIA_TYPE, POINTER_ONLY_MEDIA_TYPE } from '../lib/mediaTypes.js';
 import { publicUrlGuard, type UrlGuard } from '../lib/outboundUrl.js';
+import { readCappedJson, sanitizeRemoteEntry } from './remoteEntry.js';
 
 /** Wire shape returned by a nanda-registry instance's CatalogEntry (camelCase). */
 export interface RemoteCatalogEntry {
@@ -17,7 +18,8 @@ export interface RemoteCatalogEntry {
 
 interface RemoteCatalogDocument {
   specVersion: string;
-  entries: RemoteCatalogEntry[];
+  /** Untrusted until each passes sanitizeRemoteEntry. */
+  entries: unknown[];
 }
 
 export type FanoutBasis = 'agent_search' | 'single_agent_org';
@@ -70,16 +72,22 @@ async function fetchAgentSearch(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = `${org.registryUrl}/agents/search?q=${encodeURIComponent(query)}`;
-    // registry_url is registrant-controlled: refuse internal hosts, and
-    // refuse redirects so a public host can't bounce us to one.
-    await urlGuard(url);
-    const res = await fetch(url, { signal: controller.signal, redirect: 'error' });
+    // registry_url is registrant-controlled: refuse internal hosts, connect
+    // only to the addresses the guard checked (no DNS rebinding), and refuse
+    // redirects so a public host can't bounce us to an internal one.
+    const guardedFetch = await urlGuard(url);
+    const res = await guardedFetch(url, { signal: controller.signal, redirect: 'error' });
     if (!res.ok) return null;
 
-    const body: unknown = await res.json();
+    // The response is the registrant's to shape: read a bounded amount and
+    // keep only well-formed entries anchored to this org's own domain.
+    const body = await readCappedJson(res);
     if (!isRemoteCatalogDocument(body)) return null;
 
-    return body.entries.slice(0, perOrgLimit);
+    return body.entries
+      .map((raw) => sanitizeRemoteEntry(raw, org.domain))
+      .filter((entry): entry is RemoteCatalogEntry => entry !== null)
+      .slice(0, perOrgLimit);
   } catch {
     return null;
   } finally {

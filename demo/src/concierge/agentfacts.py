@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
+
+from .discovery import fetch_json
 
 __all__ = ["SKILL_PREFIX", "AgentFactsError", "Facts", "facts_for", "skill_name"]
 
@@ -55,9 +54,9 @@ class Facts:
 
 
 def _get(url: str, timeout: float) -> Any:
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read())
+    # Card addresses come from an organisation's catalog, so they are fetched
+    # through the same public-https-only guard as every other registrant hop.
+    return fetch_json(url, timeout=timeout)
 
 
 def facts_for(card_url: str, *, timeout: float = TIMEOUT_SECONDS) -> Facts:

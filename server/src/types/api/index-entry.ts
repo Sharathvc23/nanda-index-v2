@@ -20,6 +20,8 @@ export interface IndexEntry {
   version?: string;
   publisher?: PublisherBlock;
   trustManifest?: TrustManifest;
+  /** Always false alongside trustManifest: self-asserted, not verified by the index. */
+  trustManifestVerified?: false;
   updatedAt: string;
   extensions: Record<string, Record<string, unknown>>;
 }
@@ -46,6 +48,7 @@ export const INDEX_ENTRY_SCHEMA = {
       },
     },
     trustManifest: TRUST_MANIFEST_SCHEMA,
+    trustManifestVerified: { type: 'boolean' },
     updatedAt:     { type: 'string' },
     extensions:    EXTENSIONS_SCHEMA,
   },

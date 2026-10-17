@@ -9,8 +9,13 @@ export interface User {
   provider: 'google' | 'github' | 'email';
   providerId: string;
   passwordHash: string | null;
-  failedLoginAttempts: number;
-  lockedUntil: Date | null;
+  emailVerified: boolean;
+  /** SHA-256 of the outstanding account-verification token (never the raw token). */
+  emailVerifyToken: string | null;
+  emailVerifyTokenExpiresAt: Date | null;
+  emailVerifySentAt: Date | null;
+  /** Embedded in session JWTs; bumping it revokes every older session. */
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +26,10 @@ export interface UpsertUserParams {
   avatarUrl: string | null;
   provider: 'google' | 'github';
   providerId: string;
+  /** Whether the provider vouches for the email. Defaults to true: Google and
+   *  GitHub only hand us addresses they verified, except the GitHub fallback
+   *  case the callback flags explicitly. */
+  emailVerified?: boolean;
 }
 
 /**
@@ -55,18 +64,25 @@ export async function findUserById(id: string): Promise<User | null> {
 /**
  * Inserts a new user or updates display_name and avatar_url on conflict.
  * Returns the upserted user.
+ *
+ * On conflict the account stays verified if the provider verifies the email
+ * now, or if it was already verified for this same address (e.g. via our own
+ * verification link). A changed, unverified address drops the flag.
  */
 export async function upsertUser(params: UpsertUserParams): Promise<User> {
   const sql = getSql();
+  const emailVerified = params.emailVerified ?? true;
   const rows = await sql<User[]>`
-    INSERT INTO users (email, display_name, avatar_url, provider, provider_id)
-    VALUES (${params.email}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId})
+    INSERT INTO users (email, display_name, avatar_url, provider, provider_id, email_verified)
+    VALUES (${normalizeEmail(params.email)}, ${params.displayName}, ${params.avatarUrl}, ${params.provider}, ${params.providerId}, ${emailVerified})
     ON CONFLICT (provider, provider_id)
       DO UPDATE SET
-        email        = EXCLUDED.email,
-        display_name = EXCLUDED.display_name,
-        avatar_url   = EXCLUDED.avatar_url,
-        updated_at   = NOW()
+        email          = EXCLUDED.email,
+        display_name   = EXCLUDED.display_name,
+        avatar_url     = EXCLUDED.avatar_url,
+        email_verified = EXCLUDED.email_verified
+                         OR (users.email_verified AND users.email = EXCLUDED.email),
+        updated_at     = NOW()
     RETURNING *
   `;
   return rows[0]!;
@@ -79,9 +95,16 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
 export async function findUserByEmail(email: string): Promise<User | null> {
   const sql = getSql();
   const rows = await sql<User[]>`
-    SELECT * FROM users WHERE email = ${email} LIMIT 1
+    SELECT * FROM users WHERE lower(email) = ${normalizeEmail(email)}
+    ORDER BY created_at ASC  -- deterministic if legacy case-only duplicates exist (see migration 015)
+    LIMIT 1
   `;
   return rows[0] ?? null;
+}
+
+/** Email addresses are compared and stored trimmed and lowercased (migration 015). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 /**
@@ -95,67 +118,19 @@ export async function createUserWithPassword(
   displayName: string | null,
 ): Promise<User> {
   const sql = getSql();
+  const normalized = normalizeEmail(email);
   const rows = await sql<User[]>`
     INSERT INTO users (email, display_name, provider, provider_id, password_hash)
-    VALUES (${email}, ${displayName}, 'email', ${email}, ${passwordHash})
+    VALUES (${normalized}, ${displayName}, 'email', ${normalized}, ${passwordHash})
     RETURNING *
   `;
   return rows[0]!;
 }
 
 /**
- * Records a failed login attempt. Increments the counter and, once it reaches
- * `maxAttempts`, sets a temporary `locked_until` window. Returns the fresh row.
- */
-export async function recordFailedLogin(
-  userId: string,
-  maxAttempts: number,
-  lockoutMinutes: number,
-): Promise<User> {
-  // SET expressions read the OLD row values, so the nested CASE computes the
-  // "effective" attempt count: an expired lock resets the streak to 1, giving
-  // the user a fresh window rather than re-locking on a single later typo.
-  const sql = getSql();
-  const rows = await sql<User[]>`
-    UPDATE users
-    SET failed_login_attempts =
-          CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW()
-               THEN 1
-               ELSE failed_login_attempts + 1 END,
-        locked_until =
-          CASE
-            WHEN (CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW()
-                       THEN 1 ELSE failed_login_attempts + 1 END) >= ${maxAttempts}
-            THEN NOW() + make_interval(mins => ${lockoutMinutes})
-            ELSE NULL
-          END,
-        updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
-  return rows[0]!;
-}
-
-/**
- * Clears the failed-login counter and any active lock (called on a successful
- * login or a completed password reset). Returns the fresh row.
- */
-export async function clearLoginFailures(userId: string): Promise<User> {
-  const sql = getSql();
-  const rows = await sql<User[]>`
-    UPDATE users
-    SET failed_login_attempts = 0,
-        locked_until = NULL,
-        updated_at = NOW()
-    WHERE id = ${userId}
-    RETURNING *
-  `;
-  return rows[0]!;
-}
-
-/**
- * Sets a new password hash for a user (used by the reset-password flow).
- * Returns the fresh row.
+ * Sets a new password hash for a user (used by the reset-password flow) and
+ * bumps token_version so every session issued before the change stops working
+ * — whoever knew the old password may hold one. Returns the fresh row.
  */
 export async function updateUserPassword(
   userId: string,
@@ -165,6 +140,7 @@ export async function updateUserPassword(
   const rows = await sql<User[]>`
     UPDATE users
     SET password_hash = ${passwordHash},
+        token_version = token_version + 1,
         updated_at = NOW()
     WHERE id = ${userId}
     RETURNING *

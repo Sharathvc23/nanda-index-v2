@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -71,6 +72,12 @@ class Guest:
     urn: str = ""
     #: Used only when discovery fails, and recorded as ``configured`` when it is.
     agent_url: str = ""
+    #: The organisation server the index is expected to list this company at.
+    #: A search hit is only followed when its ``registry_url`` is this one: the
+    #: index matches on text, anybody can register a lookalike that sorts first,
+    #: and following it would send a stranger signed requests. Empty means no
+    #: hit is trusted.
+    registry_url: str = ""
 
 
 @dataclass
@@ -208,6 +215,35 @@ def _agent_label(guest: Guest) -> str:
     return f"agent:{guest.agent_label}"
 
 
+def _same_server(a: str, b: str) -> bool:
+    """Whether two registry URLs name the same server: scheme and host compared
+    case-insensitively, path compared exactly, a trailing slash ignored."""
+    left, right = urllib.parse.urlsplit(a.strip()), urllib.parse.urlsplit(b.strip())
+    return (
+        left.scheme.lower() == right.scheme.lower()
+        and left.netloc.lower() == right.netloc.lower()
+        and left.path.rstrip("/") == right.path.rstrip("/")
+    )
+
+
+def _from_expected_org(guest: Guest, found: list[Counterparty]) -> Counterparty | None:
+    """The search hit served from the guest's own organisation server, if any."""
+    if not guest.registry_url:
+        return None
+    return next((org for org in found if _same_server(org.url, guest.registry_url)), None)
+
+
+def _organisation_outcome(guest: Guest, found: list[Counterparty], chosen: Counterparty | None) -> str:
+    if chosen is not None:
+        return f"Found {guest.company} in the public directory"
+    if not found:
+        return f"No company matched '{guest.org_query}'"
+    return (
+        f"Refused: no match from the expected organisation. {len(found)} listing(s) matched "
+        f"'{guest.org_query}', none at {guest.company}'s own server, so none was opened"
+    )
+
+
 def _found_via(guest: Guest) -> str:
     """Where the address came from: the second index, or the org's own catalog."""
     return "index:second" if guest.via == VIA_INDEX_V3 else _org_label(guest)
@@ -260,20 +296,26 @@ def arrange(
             )
             continue
 
+        # Not the first hit: search ranks by org id, so a registrant named
+        # "aaa-regentix" would sort ahead of Regentix and be the one followed.
+        chosen = _from_expected_org(guest, found)
         chain.append(
             step="discover.organisation",
             counterparty_label="index:public",
             request={"subject": guest.company, "query": guest.org_query, "index": "api.nandaindex.org"},
-            answer={"matches": [c.provenance() for c in found]},
-            outcome=(
-                f"Found {guest.company} in the public directory"
-                if found
-                else f"No company matched '{guest.org_query}'"
+            answer={
+                "matches": [c.provenance() for c in found],
+                "expected_registry": guest.registry_url,
+                "chosen": chosen.provenance() if chosen else None,
+            },
+            outcome=_organisation_outcome(guest, found, chosen),
+            not_claimed=(
+                "That the company found is the one meant. A listing describes itself; it was "
+                "followed only because it points at the server this concierge was configured with.",
             ),
-            not_claimed=("That the company found is the one meant. A listing describes itself.",),
         )
 
-        for org in found[:1]:
+        for org in [chosen] if chosen else []:
             try:
                 catalog = org_catalog(org.url)
             except Exception as exc:  # noqa: BLE001

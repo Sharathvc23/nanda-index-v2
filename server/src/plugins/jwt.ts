@@ -1,11 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fjwt from '@fastify/jwt';
 import { buildConfig } from '../config/index.js';
+import { findUserById } from '../db/queries/users.js';
 
 export interface JwtPayload {
   userId: string;
   email: string;
   displayName: string | null;
+  /** users.token_version at issue time. Tokens minted before this claim
+   *  existed carry none and are treated as version 0. */
+  tokenVersion?: number;
 }
 
 declare module '@fastify/jwt' {
@@ -18,12 +22,18 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireVerifiedAccount: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 /**
- * Registers @fastify/jwt and adds the `fastify.authenticate` preHandler decorator.
- * Protected routes use: `preHandler: fastify.authenticate`
+ * Registers @fastify/jwt and adds two preHandler decorators:
+ *
+ *   fastify.authenticate           — valid, unrevoked session token required
+ *   fastify.requireVerifiedAccount — account email must be verified
+ *                                    (use after authenticate)
+ *
+ * Protected routes use: `preHandler: [fastify.authenticate, ...]`
  */
 export async function registerJwtPlugin(fastify: FastifyInstance): Promise<void> {
   const config = buildConfig();
@@ -34,6 +44,26 @@ export async function registerJwtPlugin(fastify: FastifyInstance): Promise<void>
       await request.jwtVerify();
     } catch {
       reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'missing or invalid token' });
+      return;
+    }
+
+    // A signature check alone cannot revoke a JWT. Comparing against the
+    // user's current token_version lets a password reset end every older
+    // session, and a deleted account's tokens stop working immediately.
+    const { userId, tokenVersion } = request.user as JwtPayload;
+    const user = await findUserById(userId);
+    if (!user || user.tokenVersion !== (tokenVersion ?? 0)) {
+      reply.code(401).send({ error: 'UNAUTHORIZED', detail: 'session expired; please sign in again' });
+    }
+  });
+
+  // Looked up fresh rather than read from JWT claims: a session issued before
+  // the user clicked the verification link must start working right away.
+  fastify.decorate('requireVerifiedAccount', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as JwtPayload;
+    const user = await findUserById(userId);
+    if (!user?.emailVerified) {
+      reply.code(403).send({ error: 'ACCOUNT_NOT_VERIFIED', detail: 'verify your account email first' });
     }
   });
 }

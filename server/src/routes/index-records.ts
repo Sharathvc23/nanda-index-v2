@@ -9,7 +9,8 @@ import { isLive } from '../services/resolution.js';
  * Public read-only routes for the NANDA Index.
  *
  * GET /api/v1/index           — list all active entries, in the paper's AI Catalog entry shape
- * GET /api/v1/index/:org_id   — get a single entry (same shape), 404 on miss
+ * GET /api/v1/index/:org_id   — get a single live entry (same shape); 404 on
+ *                                miss, and for pending, suspended or unproven orgs
  * GET /api/v1/verify-email    — mark org contact email verified (also activates
  *                                personal/no-domain orgs; domain-based orgs
  *                                still need domain verification separately)
@@ -29,11 +30,12 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     return reply.send(orgs.map(toIndexEntry));
   });
 
-  // Get a single index record by org_id
+  // Get a single live index record by org_id
   fastify.get<{ Params: { org_id: string } }>('/api/v1/index/:org_id', {
     schema: {
       tags: ['index'],
-      summary: 'Get a single index entry (AI Catalog entry shape)',
+      summary: 'Get a single live index entry (AI Catalog entry shape)',
+      description: 'Only live entries (active and proven) are public: pending, suspended and unproven entries return 404, the same as an unknown org_id.',
       params: {
         type: 'object',
         required: ['org_id'],

@@ -295,7 +295,7 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/index` | List all active index entries, in the paper's AI Catalog entry shape (`identifier`, `displayName`, `type`, `url`, `publisher`, `extensions`); operational state (`orgId`, `status`, `ttlSeconds`, verification flags) is under `extensions["org.projectnanda"]` |
-| `GET` | `/api/v1/index/:org_id` | Get a single index entry (same shape) |
+| `GET` | `/api/v1/index/:org_id` | Get a single live index entry (same shape); `404` for pending, suspended or unproven (domain not verified) orgs, the same as an unknown `org_id` |
 | `GET` | `/api/v1/resolve?locator=<urn>` | Resolve a URN to its AI Catalog entry |
 | `GET` | `/api/v1/search?q=<query>` | Keyword or URN search |
 | `GET` | `/api/v1/verify-email?token=<token>` | Activate org via email link |

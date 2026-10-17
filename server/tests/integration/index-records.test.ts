@@ -130,6 +130,17 @@ describe('NANDA Index — public read routes', () => {
     expect(res.json().error).toBe('NOT_FOUND');
   });
 
+  // An unverified claim to a domain must not be publicly readable, and the
+  // response must not reveal the entry's contents or status.
+  it.each(['pending', 'suspended'])('returns 404 for a %s org, indistinguishable from an unknown one', async (status) => {
+    await seedOrg(`idx-${status}`, `${status}.example.com`, `${status} Org`, { status });
+
+    const res = await fastify.inject({ method: 'GET', url: `/api/v1/index/idx-${status}` });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'NOT_FOUND', detail: `org "idx-${status}" not found` });
+  });
+
   // ── GET /api/v1/verify-email ────────────────────────────────────────────────
 
   it('marks email verified via valid token but does NOT activate (domain gate)', async () => {

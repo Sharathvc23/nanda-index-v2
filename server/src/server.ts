@@ -12,6 +12,7 @@ import { registerJwtPlugin } from './plugins/jwt.js';
 import { registerOAuthPlugin } from './plugins/oauth.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerAccountVerificationRoutes } from './routes/account-verification.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
 import { registerMeRoute } from './routes/me.js';
@@ -60,6 +61,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   // Routes
   await registerHealthRoute(fastify);
   await registerAuthRoutes(fastify);
+  await registerAccountVerificationRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
   await registerMeRoute(fastify);

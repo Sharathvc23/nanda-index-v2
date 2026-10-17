@@ -192,7 +192,7 @@ export function buildConfig(): Config {
     },
     jwt: {
       secret:    jwtSecret,
-      expiresIn: optionalEnv('JWT_EXPIRES_IN', '7d'),
+      expiresIn: optionalEnv('JWT_EXPIRES_IN', '1d'),
     },
     email: {
       smtpUrl:     optionalEnv('SMTP_URL', 'log'),
@@ -228,7 +228,7 @@ export function buildConfig(): Config {
         'UNPROVEN_SLUG_HOLD_HOURS', optionalEnv('UNPROVEN_SLUG_HOLD_HOURS', '48'),
       ),
     },
-    trustProxyHops: Number.parseInt(optionalEnv('TRUST_PROXY_HOPS', '0'), 10) || 0,
+    trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,
@@ -257,6 +257,15 @@ export function buildConfig(): Config {
       ),
     },
   };
+}
+
+function parseNonNegativeInt(key: string, raw: string): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    console.error(`FATAL: env var ${key} must be a non-negative integer (got "${raw}")`);
+    process.exit(1);
+  }
+  return n;
 }
 
 function parseFederationMode(raw: string): FederationConfig['mode'] {

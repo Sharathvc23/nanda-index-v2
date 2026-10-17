@@ -158,6 +158,30 @@ describe('buildConfig', () => {
     expect(cfg.auth.resetTokenTtlMinutes).toBe(60);
   });
 
+  it('defaults JWT lifetime to 1 day', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.JWT_EXPIRES_IN;
+
+    expect(buildConfig().jwt.expiresIn).toBe('1d');
+  });
+
+  it('does not trust proxy headers unless TRUST_PROXY_HOPS is set', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.TRUST_PROXY_HOPS;
+    expect(buildConfig().trustProxyHops).toBe(0);
+
+    process.env.TRUST_PROXY_HOPS = '1';
+    expect(buildConfig().trustProxyHops).toBe(1);
+  });
+
+  it('exits on a non-integer TRUST_PROXY_HOPS', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.TRUST_PROXY_HOPS = 'yes';
+    const exitSpy = mockExit();
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('reads auth overrides from env', () => {
     process.env.DATABASE_URL = 'x';
     process.env.AUTH_MAX_LOGIN_ATTEMPTS = '7';

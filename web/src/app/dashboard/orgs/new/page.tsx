@@ -6,7 +6,7 @@ import Link from "next/link";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
-import { ApiError, createOrg } from "@/lib/nanda-api";
+import { ApiError, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import type { CatalogExtensions, HostingPath, IndexRecord } from "@/lib/nanda-types";
@@ -321,6 +321,7 @@ export default function NewOrgPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [needsAccountVerification, setNeedsAccountVerification] = useState(false);
   const [created, setCreated] = useState<IndexRecord | null>(null);
 
   const patch = (key: keyof FormState, val: string) => setForm((f) => ({ ...f, [key]: val }));
@@ -403,6 +404,7 @@ export default function NewOrgPage() {
       });
       setCreated(record);
     } catch (err) {
+      setNeedsAccountVerification(isAccountNotVerified(err));
       setApiError(err instanceof ApiError ? err.message : "Registration failed.");
     } finally {
       setSaving(false);
@@ -715,7 +717,17 @@ export default function NewOrgPage() {
           </div>
 
           {apiError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{apiError}</div>
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {apiError}
+              {needsAccountVerification && (
+                <>
+                  {" "}
+                  <Link href="/dashboard" className="font-medium underline">
+                    Go to your dashboard
+                  </Link>
+                </>
+              )}
+            </div>
           )}
 
           <div className="flex gap-3">

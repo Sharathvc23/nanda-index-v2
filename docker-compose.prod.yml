@@ -36,7 +36,7 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://nanda:${POSTGRES_PASSWORD}@db:5432/nanda_index
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
@@ -48,7 +48,7 @@ services:
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
       COOKIE_SECRET: ${COOKIE_SECRET}
       # Caddy is the one proxy in front: trust its X-Forwarded-For so per-IP rate
-      # limits apply per visitor, not to Caddy's address. Safe only because this
+      # limits and login lockout apply per visitor, not to Caddy's address. Safe only because this
       # service publishes no port — keep it that way.
       TRUST_PROXY_HOPS: "1"
       # Public API origin — the ARD registry document (GET /api/ard) advertises it.

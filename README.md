@@ -111,7 +111,7 @@ POSTGRES_PASSWORD=          # strong random password
 
 # JWT — generate with: openssl rand -hex 64
 JWT_SECRET=
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=1d
 
 # OAuth (optional — leave blank to disable)
 GOOGLE_CLIENT_ID=

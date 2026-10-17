@@ -38,7 +38,7 @@ services:
       DATABASE_URL: postgresql://nanda:${POSTGRES_PASSWORD:-nanda-local}@db:5432/nanda_index
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       COOKIE_SECRET: ${COOKIE_SECRET:-dev-cookie-secret-change-in-production}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}

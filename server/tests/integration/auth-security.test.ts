@@ -3,21 +3,40 @@ import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { buildServer } from '../../src/server.js';
 import { getSql, closeSql } from '../../src/db/client.js';
-import { createUserWithPassword, findUserByEmail } from '../../src/db/queries/users.js';
+import { createUserWithPassword } from '../../src/db/queries/users.js';
 import { createResetToken } from '../../src/db/queries/passwordResetTokens.js';
 
 const PW = 'correct-horse-battery'; // >= 8 chars to satisfy the schema
+const ATTACKER_IP = '203.0.113.66';
+const OWNER_IP = '198.51.100.7';
 
-/** Deletes any existing user with this email, then recreates it with PW. */
+/** Deletes any existing user (and its lockout rows) with this email, then recreates it with PW. */
 async function resetUser(email: string) {
   const sql = getSql();
   await sql`DELETE FROM users WHERE email = ${email}`;
+  await sql`DELETE FROM login_failures WHERE email = ${email}`;
   const hash = await bcrypt.hash(PW, 10);
   return createUserWithPassword(email, hash, 'Security Test');
 }
 
-function login(app: FastifyInstance, email: string, password: string) {
-  return app.inject({ method: 'POST', url: '/auth/login', payload: { email, password } });
+function login(app: FastifyInstance, email: string, password: string, ip = '127.0.0.1') {
+  return app.inject({ method: 'POST', url: '/auth/login', payload: { email, password }, remoteAddress: ip });
+}
+
+async function failureCount(email: string, ip: string): Promise<number> {
+  const rows = await getSql()<{ failedCount: number }[]>`
+    SELECT failed_count FROM login_failures WHERE email = ${email} AND ip_address = ${ip}
+  `;
+  return rows[0]?.failedCount ?? 0;
+}
+
+/** Seconds until the (email, ip) lock expires. */
+async function lockSeconds(email: string, ip: string): Promise<number> {
+  const rows = await getSql()<{ secs: number }[]>`
+    SELECT EXTRACT(EPOCH FROM (locked_until - NOW()))::float AS secs
+    FROM login_failures WHERE email = ${email} AND ip_address = ${ip}
+  `;
+  return Number(rows[0]?.secs ?? 0);
 }
 
 describe('auth security hardening', () => {
@@ -43,49 +62,92 @@ describe('auth security hardening', () => {
     await closeSql();    // no-op if already closed
   });
 
-  describe('account lockout', () => {
-    it('locks the account after the configured failed attempts', async () => {
+  describe('account lockout (per account + client IP)', () => {
+    it('locks the account for the failing IP after the configured failed attempts', async () => {
       const email = 'lockout@example.com';
       await resetUser(email);
 
       for (let i = 0; i < 3; i++) {
-        const res = await login(app, email, 'wrong-password');
+        const res = await login(app, email, 'wrong-password', ATTACKER_IP);
         expect(res.statusCode).toBe(401);
       }
 
-      // Locked now — even the correct password is rejected with 429.
-      const res = await login(app, email, PW);
+      // Locked now for that IP — even the correct password is rejected with 429.
+      const res = await login(app, email, PW, ATTACKER_IP);
       expect(res.statusCode).toBe(429);
       expect(res.json().error).toBe('TOO_MANY_ATTEMPTS');
+    });
+
+    it("does not lock the real owner out when an attacker's IP is locked", async () => {
+      const email = 'lockout-targeted@example.com';
+      await resetUser(email);
+
+      for (let i = 0; i < 5; i++) await login(app, email, 'wrong-password', ATTACKER_IP);
+      expect((await login(app, email, PW, ATTACKER_IP)).statusCode).toBe(429);
+
+      const res = await login(app, email, PW, OWNER_IP);
+      expect(res.statusCode).toBe(200);
     });
 
     it('auto-clears the lock once the window has passed', async () => {
       const email = 'lockout-expire@example.com';
       await resetUser(email);
 
-      for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password');
-      expect((await login(app, email, PW)).statusCode).toBe(429);
+      for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password', ATTACKER_IP);
+      expect((await login(app, email, PW, ATTACKER_IP)).statusCode).toBe(429);
 
       // Simulate the lock window elapsing.
-      await getSql()`UPDATE users SET locked_until = NOW() - INTERVAL '1 minute' WHERE email = ${email}`;
+      await getSql()`UPDATE login_failures SET locked_until = NOW() - INTERVAL '1 minute' WHERE email = ${email}`;
 
-      const res = await login(app, email, PW);
+      const res = await login(app, email, PW, ATTACKER_IP);
       expect(res.statusCode).toBe(200);
+      expect(await failureCount(email, ATTACKER_IP)).toBe(0);
+    });
 
-      const user = await findUserByEmail(email);
-      expect(user?.failedLoginAttempts).toBe(0);
+    it('backs off exponentially when failures continue after a lock expires', async () => {
+      const email = 'lockout-backoff@example.com';
+      await resetUser(email);
+
+      for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password', ATTACKER_IP);
+      const first = await lockSeconds(email, ATTACKER_IP);
+      expect(first).toBeGreaterThan(14 * 60);
+      expect(first).toBeLessThanOrEqual(15 * 60);
+
+      await getSql()`UPDATE login_failures SET locked_until = NOW() - INTERVAL '1 second' WHERE email = ${email}`;
+      expect((await login(app, email, 'wrong-password', ATTACKER_IP)).statusCode).toBe(401);
+
+      const second = await lockSeconds(email, ATTACKER_IP);
+      expect(second).toBeGreaterThan(29 * 60);
+      expect(second).toBeLessThanOrEqual(30 * 60);
     });
 
     it('resets the failure counter on a successful login', async () => {
       const email = 'lockout-reset@example.com';
       await resetUser(email);
 
-      await login(app, email, 'wrong-password');
-      await login(app, email, 'wrong-password');
-      expect((await findUserByEmail(email))?.failedLoginAttempts).toBe(2);
+      await login(app, email, 'wrong-password', OWNER_IP);
+      await login(app, email, 'wrong-password', OWNER_IP);
+      expect(await failureCount(email, OWNER_IP)).toBe(2);
 
-      expect((await login(app, email, PW)).statusCode).toBe(200);
-      expect((await findUserByEmail(email))?.failedLoginAttempts).toBe(0);
+      expect((await login(app, email, PW, OWNER_IP)).statusCode).toBe(200);
+      expect(await failureCount(email, OWNER_IP)).toBe(0);
+    });
+
+    it('answers an unknown email exactly like a wrong password', async () => {
+      const email = 'lockout-unknown@example.com';
+      await resetUser(email);
+      await getSql()`DELETE FROM users WHERE email = ${email}`;
+      const known = 'lockout-known@example.com';
+      await resetUser(known);
+
+      const unknownRes = await login(app, email, 'wrong-password', OWNER_IP);
+      const knownRes = await login(app, known, 'wrong-password', OWNER_IP);
+      expect(unknownRes.statusCode).toBe(401);
+      expect(unknownRes.json()).toEqual(knownRes.json());
+
+      // Unknown emails lock the same way, so a 429 does not reveal existence.
+      for (let i = 0; i < 2; i++) await login(app, email, 'wrong-password', OWNER_IP);
+      expect((await login(app, email, 'wrong-password', OWNER_IP)).statusCode).toBe(429);
     });
   });
 
@@ -157,6 +219,59 @@ describe('auth security hardening', () => {
         payload: { token: 'deadbeef'.repeat(8), password: 'some-new-pass' },
       });
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('session revocation', () => {
+    function me(token: string) {
+      return app.inject({ method: 'GET', url: '/api/v1/me', headers: { authorization: `Bearer ${token}` } });
+    }
+
+    it('includes the token version in issued session tokens', async () => {
+      const email = 'session-version@example.com';
+      await resetUser(email);
+
+      const res = await login(app, email, PW);
+      const payload = app.jwt.decode<{ tokenVersion: number }>(res.json().token);
+      expect(payload?.tokenVersion).toBe(0);
+    });
+
+    it('invalidates existing sessions when the password is reset', async () => {
+      const email = 'session-revoke@example.com';
+      const user = await resetUser(email);
+      const oldSession = (await login(app, email, PW)).json().token as string;
+      expect((await me(oldSession)).statusCode).toBe(200);
+
+      const { token } = await createResetToken(user.id, 60);
+      const newPw = 'post-reset-password';
+      await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token, password: newPw } });
+
+      expect((await me(oldSession)).statusCode).toBe(401);
+      const newSession = (await login(app, email, newPw)).json().token as string;
+      expect((await me(newSession)).statusCode).toBe(200);
+    });
+
+    it('clears IP lockouts on password reset', async () => {
+      const email = 'session-reset-lock@example.com';
+      const user = await resetUser(email);
+      for (let i = 0; i < 3; i++) await login(app, email, 'wrong-password');
+      expect((await login(app, email, PW)).statusCode).toBe(429);
+
+      const { token } = await createResetToken(user.id, 60);
+      await app.inject({
+        method: 'POST', url: '/auth/reset-password', payload: { token, password: 'after-lock-reset' },
+      });
+
+      expect((await login(app, email, 'after-lock-reset')).statusCode).toBe(200);
+    });
+
+    it('rejects a session for a user that no longer exists', async () => {
+      const email = 'session-deleted@example.com';
+      await resetUser(email);
+      const session = (await login(app, email, PW)).json().token as string;
+      await getSql()`DELETE FROM users WHERE email = ${email}`;
+
+      expect((await me(session)).statusCode).toBe(401);
     });
   });
 

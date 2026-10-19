@@ -270,33 +270,40 @@ export async function findByUserId(userId: string): Promise<Organization[]> {
   `;
 }
 
-export interface ListedPage {
-  rows: Organization[];
-  /** Listed entries in total, independent of limit/offset. */
-  total: number;
-}
-
 /**
  * One page of listed entries — active and not moderated (every listing and
  * search below applies the same `moderation = 'none'` filter; hidden and
  * taken-down entries never appear in one). Ordered by creation date, with
  * org_id as a tie-breaker so offsets page deterministically.
+ *
+ * The page's org_ids are picked first from idx_organizations_listed_order
+ * (an index-only scan: the rows an OFFSET skips are not read from the table,
+ * except on pages changed since the last vacuum), then only those rows are
+ * fetched. The web app pages through the whole index, so deep offsets are a
+ * normal request, not an edge case.
  */
-export async function listListedEntries(limit: number, offset: number): Promise<ListedPage> {
+export async function listListedEntries(limit: number, offset: number): Promise<Organization[]> {
   const sql = getSql();
-  const [rows, counted] = await Promise.all([
-    sql<Organization[]>`
-      SELECT * FROM organizations
+  return sql<Organization[]>`
+    SELECT o.* FROM organizations o
+    JOIN (
+      SELECT org_id FROM organizations
       WHERE status = 'active' AND moderation = 'none'
       ORDER BY created_at ASC, org_id ASC
       LIMIT ${limit} OFFSET ${offset}
-    `,
-    sql<{ total: string }[]>`
-      SELECT COUNT(*)::text AS total FROM organizations
-      WHERE status = 'active' AND moderation = 'none'
-    `,
-  ]);
-  return { rows, total: Number(counted[0]?.total ?? 0) };
+    ) page USING (org_id)
+    ORDER BY o.created_at ASC, o.org_id ASC
+  `;
+}
+
+/** Listed entries in total (see listListedEntries); an index-only scan. */
+export async function countListedEntries(): Promise<number> {
+  const sql = getSql();
+  const [counted] = await sql<{ total: string }[]>`
+    SELECT COUNT(*)::text AS total FROM organizations
+    WHERE status = 'active' AND moderation = 'none'
+  `;
+  return Number(counted?.total ?? 0);
 }
 
 /**

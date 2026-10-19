@@ -151,6 +151,12 @@ export interface Config {
    *  (1 behind Caddy in production). 0 = reached directly; the header is then
    *  ignored, since any client could forge it to dodge per-IP rate limits. */
   readonly trustProxyHops: number;
+  /** How long the public index total (X-Total-Count) and ARD facet counts
+   *  are reused before being counted again. They read every listed entry
+   *  however small the page, so their cost grows with the index. Moderation
+   *  and new entries show in them only after this long. 0 = count on every
+   *  request. */
+  readonly indexStatsCacheSeconds: number;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
   /** Public base URL this API is reachable at — used to build absolute
@@ -259,6 +265,9 @@ export function buildConfig(): Config {
     },
     adminEmails: parseAdminEmails(optionalEnv('ADMIN_EMAILS', '')),
     trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
+    indexStatsCacheSeconds: parseNonNegativeInt(
+      'INDEX_STATS_CACHE_SECONDS', optionalEnv('INDEX_STATS_CACHE_SECONDS', '60'),
+    ),
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,

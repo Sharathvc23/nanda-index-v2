@@ -186,6 +186,23 @@ describe('buildConfig', () => {
     expect(buildConfig().trustProxyHops).toBe(1);
   });
 
+  it('caches index counts and facets for 60 seconds unless INDEX_STATS_CACHE_SECONDS says otherwise', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.INDEX_STATS_CACHE_SECONDS;
+    expect(buildConfig().indexStatsCacheSeconds).toBe(60);
+
+    process.env.INDEX_STATS_CACHE_SECONDS = '0';
+    expect(buildConfig().indexStatsCacheSeconds).toBe(0);
+  });
+
+  it('exits on a negative INDEX_STATS_CACHE_SECONDS', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.INDEX_STATS_CACHE_SECONDS = '-5';
+    const exitSpy = mockExit();
+    expect(() => buildConfig()).toThrow('__mock_exit__');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('exits on a non-integer TRUST_PROXY_HOPS', () => {
     process.env.DATABASE_URL = 'x';
     process.env.TRUST_PROXY_HOPS = 'yes';

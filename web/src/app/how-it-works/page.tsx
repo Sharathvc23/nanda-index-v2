@@ -28,7 +28,7 @@ const FLOWS: {
         { label: "Deploy ai-catalog", detail: "Deploy at .well-known, (optionally clone https://github.com/projnanda/nanda-registry-server-repo which provides basic ai-catalog hosting code)" },
         { label: "Register org", detail: "Create an org in NANDA Index with your registry base URL and domain." },
         { label: "Add agents", detail: "Register each agent on your registry via Registry Manager or the /agents API." },
-        { label: "Verify & go live", detail: "Confirm your contact email. Resolvers can now discover your agents." },
+        { label: "Verify & go live", detail: "Prove domain ownership: add the DNS TXT record shown on your org page, then click Check DNS now. Resolvers can discover your agents once it passes. Confirm your contact email too, so we can reach you." },
       ],
       resolution: "Requester fetches AI Catalog directly, selects agent, tool, MCP server, or gateway, follows artifact URL.",
     },
@@ -58,7 +58,7 @@ const FLOWS: {
       steps: [
         { label: "Create card", detail: "Build your A2A Agent Card on host39.org. No server setup required." },
         { label: "Register org", detail: "Create an org in NANDA Index and paste your agent card URL." },
-        { label: "Verify & go live", detail: "Confirm your contact email. NANDA Index points resolvers directly to your card." },
+        { label: "Verify & go live", detail: "Prove domain ownership: add the DNS TXT record shown on your org page, then click Check DNS now. Once it passes, NANDA Index points resolvers directly to your card. Confirm your contact email too, so we can reach you." },
         { label: "Update via host39", detail: "Edit your card any time on host39.org. No index update needed." },
       ],
       resolution: "NANDA Index, Agent Card at host39.org, AWS runtime, payment or session token required.",

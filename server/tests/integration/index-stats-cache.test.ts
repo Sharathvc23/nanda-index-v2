@@ -23,7 +23,7 @@ async function seedOrg(orgId: string): Promise<void> {
 
 // Every other suite runs with INDEX_STATS_CACHE_SECONDS=0 (tests/setup.ts) so
 // counts reflect rows they just inserted. This one turns the cache on.
-describe('Index total with the stats cache on', () => {
+describe('Index total and ARD facets with the stats cache on', () => {
   let fastify: FastifyInstance;
   const originalTtl = process.env['INDEX_STATS_CACHE_SECONDS'];
 
@@ -57,5 +57,23 @@ describe('Index total with the stats cache on', () => {
     const orgIds = (after.json() as Array<{ extensions: Record<string, { orgId: string }> }>)
       .map((e) => e.extensions['org.projectnanda']!.orgId);
     expect(orgIds).toContain('stats-b');
+  });
+
+  it('reuses ARD facet counts within the TTL', async () => {
+    const explore = () => fastify.inject({
+      method: 'POST', url: '/api/ard/explore',
+      payload: { resultType: { facets: [{ field: 'type' }, { field: 'tags' }] } },
+    });
+    const tagCount = (res: Awaited<ReturnType<typeof explore>>) =>
+      res.json().facets.tags.buckets.find((b: { value: string }) => b.value === TAG)?.count;
+
+    await seedOrg('stats-a');
+    const before = await explore();
+    expect(tagCount(before)).toBe(1);
+
+    await seedOrg('stats-b');
+    const after = await explore();
+    expect(tagCount(after)).toBe(1);
+    expect(after.json().facets.type).toEqual(before.json().facets.type);
   });
 });

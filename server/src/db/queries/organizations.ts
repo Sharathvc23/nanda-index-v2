@@ -838,13 +838,14 @@ export async function listOrganizationsPaged(
 }
 
 export interface FacetBucket {
-  value: string;
-  count: number;
+  readonly value: string;
+  readonly count: number;
 }
 
 /** Facet counts by media_type, over active organizations only — backs
- *  POST /api/ard/explore (org-level scope, see plan's Open Tradeoffs #1/#2). */
-export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
+ *  POST /api/ard/explore (org-level scope, see plan's Open Tradeoffs #1/#2).
+ *  Frozen: the route caches one result and hands it to every caller. */
+export async function countOrgsByMediaType(): Promise<readonly FacetBucket[]> {
   const sql = getSql();
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT media_type AS value, COUNT(*)::text AS count
@@ -853,11 +854,11 @@ export async function countOrgsByMediaType(): Promise<FacetBucket[]> {
     GROUP BY media_type
     ORDER BY count DESC
   `;
-  return rows.map((r) => ({ value: r.value, count: Number(r.count) }));
+  return Object.freeze(rows.map((r) => Object.freeze({ value: r.value, count: Number(r.count) })));
 }
 
-/** Facet counts by individual tag, over active organizations only. */
-export async function countOrgsByTag(): Promise<FacetBucket[]> {
+/** Facet counts by individual tag, over active organizations only (frozen, as above). */
+export async function countOrgsByTag(): Promise<readonly FacetBucket[]> {
   const sql = getSql();
   const rows = await sql<{ value: string; count: string }[]>`
     SELECT t AS value, COUNT(*)::text AS count
@@ -866,5 +867,5 @@ export async function countOrgsByTag(): Promise<FacetBucket[]> {
     GROUP BY t
     ORDER BY count DESC
   `;
-  return rows.map((r) => ({ value: r.value, count: Number(r.count) }));
+  return Object.freeze(rows.map((r) => Object.freeze({ value: r.value, count: Number(r.count) })));
 }

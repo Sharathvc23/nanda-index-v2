@@ -98,3 +98,20 @@ Taken on an M1 Pro (server and db capped at one core each), `origin/main` at
 | agentic search, 100 orgs | ~115 searches/s (~1,150 fan-out calls/s) | server CPU |
 | spike 100 → 1,500 → 100 req/s | recovered within 10s | n/a |
 | soak, 100 req/s blend, 10 min | 0 errors, server memory flat (~60 MiB) | n/a; read p95 ~100 ms (vs ~5 ms in pure reads) from logins interleaving |
+
+## After the index and cache fix (F1): 2026-10-19
+
+Same machine and caps, `perf/index-query-scans`: migration 018 (trigram and
+listing-order indexes), a deferred-join listing, the index total and ARD
+facets cached for `INDEX_STATS_CACHE_SECONDS`, and keyword search planned per
+call. Run with `./run.sh test reads -e MAX_RATE=1500`.
+
+| Test | Ceiling | First bottleneck |
+|---|---|---|
+| reads, 100 orgs | above 1,500 req/s (top of the staircase), p95 ≤ 5 ms | none reached: server ~78%, db ~37% |
+| reads, 50,000 orgs | clean to ~300 req/s (p95 16 ms); ~430 req/s served when overloaded, 0 errors | db CPU: keyword searches that match thousands of entries, each ranked with `ts_rank` |
+
+The seed builds names and tags from 20 category words, so a one-word search
+matches ~10% of entries. Terms that match nearly every entry, such as `ai` or
+`agent` (both in every `urn:air:…:agent:` identifier), cost ~115–150 ms each
+at 50,000 entries and are not in the mix.

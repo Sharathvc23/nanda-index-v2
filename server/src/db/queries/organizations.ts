@@ -624,33 +624,47 @@ function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/** Keyword search query; see searchOrganizations for why it is not prepared. */
+const SEARCH_ORGANIZATIONS_SQL = `
+  SELECT * FROM organizations
+  WHERE status = 'active' AND moderation = 'none'
+    AND (
+      LOWER(org_id)                       LIKE $1 ESCAPE '\\'
+      OR LOWER(COALESCE(domain, ''))      LIKE $1 ESCAPE '\\'
+      OR LOWER(display_name)              LIKE $1 ESCAPE '\\'
+      OR LOWER(COALESCE(identifier, ''))  LIKE $1 ESCAPE '\\'
+      OR search_vector @@ websearch_to_tsquery('english', $3)
+    )
+  ORDER BY
+    (LOWER(org_id) = $2 OR LOWER(COALESCE(identifier, '')) = $2) DESC,
+    ts_rank(search_vector, websearch_to_tsquery('english', $3)) DESC,
+    org_id ASC
+  LIMIT 50
+`;
+
 /**
  * Keyword search over active organizations: a substring match on org_id,
  * domain, display_name and identifier, plus a full-text match on what the
  * entry describes (tags, description, representative queries — the
  * search_vector column). Exact org_id/identifier matches rank first, then by
  * full-text relevance.
+ *
+ * Each LOWER(...) LIKE in SEARCH_ORGANIZATIONS_SQL is served by a trigram
+ * index from migration 018 built on that exact expression; change one and its
+ * index stops being used.
+ *
+ * Planned afresh on every call (an unnamed statement, not a prepared one).
+ * Which plan is fastest depends on the term: a rare one wants the trigram
+ * indexes (<1 ms at 50k entries), while one that matches most entries (`ai`
+ * is in every urn:air: identifier) wants a sequential scan. A prepared
+ * statement soon settles on one generic plan per connection, and that plan
+ * took ~240 ms for `ai` against ~115 ms planned for the term.
  */
 export async function searchOrganizations(query: string): Promise<Organization[]> {
   const sql = getSql();
   const lowered = query.toLowerCase();
   const pattern = `%${escapeLike(lowered)}%`;
-  return sql<Organization[]>`
-    SELECT * FROM organizations
-    WHERE status = 'active' AND moderation = 'none'
-      AND (
-        LOWER(org_id)                       LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(COALESCE(domain, ''))      LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(display_name)              LIKE ${pattern} ESCAPE '\\'
-        OR LOWER(COALESCE(identifier, ''))  LIKE ${pattern} ESCAPE '\\'
-        OR search_vector @@ websearch_to_tsquery('english', ${query})
-      )
-    ORDER BY
-      (LOWER(org_id) = ${lowered} OR LOWER(COALESCE(identifier, '')) = ${lowered}) DESC,
-      ts_rank(search_vector, websearch_to_tsquery('english', ${query})) DESC,
-      org_id ASC
-    LIMIT 50
-  `;
+  return sql.unsafe<Organization[]>(SEARCH_ORGANIZATIONS_SQL, [pattern, lowered, query], { prepare: false });
 }
 
 export interface RankedOrganization extends Organization {

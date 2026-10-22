@@ -1,6 +1,5 @@
 import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
-import { CONTRIBUTOR_LOGOS } from "@/lib/contributor-logos";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
 import { externalLinks } from "@/lib/site-data";
 
@@ -119,9 +118,6 @@ export default function ContributorsPage() {
       description="Nanda Index is being designed, reviewed, and supported by agent builders."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <a href="#organizations" className="text-brand-600 hover:text-brand-700 hover:underline">
-          Organizations
-        </a>
         <a href="#community-perspectives" className="text-brand-600 hover:text-brand-700 hover:underline">
           Community perspectives
         </a>
@@ -132,37 +128,30 @@ export default function ContributorsPage() {
           Contributors
         </a>
       </nav>
-      <section id="organizations" aria-labelledby="organizations-heading" className="mb-12 max-w-5xl scroll-mt-24">
-        <h2 id="organizations-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
-          Organizations
-        </h2>
-        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {CONTRIBUTOR_LOGOS.map(({ name, src, width, height }) => (
-            <li key={src} className="flex h-28 items-center justify-center rounded-lg border border-line bg-white p-4">
-              <Image
-                src={src}
-                alt={name}
-                width={width}
-                height={height}
-                sizes="(min-width: 1024px) 176px, (min-width: 640px) 200px, 42vw"
-                className="h-20 w-full object-contain"
-              />
-            </li>
-          ))}
-        </ul>
-      </section>
       <div className="max-w-3xl space-y-12">
         <section id="community-perspectives" aria-labelledby="community-perspectives-heading" className="scroll-mt-24">
           <h2 id="community-perspectives-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
             Community perspectives
           </h2>
           <div className="space-y-8">
-            {CONTRIBUTOR_QUOTES.map(({ text, attribution }) => (
-              <figure key={attribution} className="border-l-2 border-brand-300 pl-5">
-                <blockquote className="text-sm leading-relaxed text-ink">
+            {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo }) => (
+              <figure key={attribution} className="grid gap-x-6 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                {logo ? (
+                  <div className="mb-4 flex h-20 w-32 items-center justify-center self-start rounded-md bg-white px-2 sm:row-span-2 sm:mb-0">
+                    <Image
+                      src={logo.src}
+                      alt={logo.name}
+                      width={logo.width}
+                      height={logo.height}
+                      sizes="112px"
+                      className="h-16 w-full object-contain"
+                    />
+                  </div>
+                ) : null}
+                <blockquote className="border-l-2 border-brand-300 pl-5 text-sm leading-relaxed text-ink sm:col-start-2">
                   <p>“{text}”</p>
                 </blockquote>
-                <figcaption className="mt-3 text-sm font-semibold text-ink-strong">
+                <figcaption className="border-l-2 border-brand-300 pl-5 pt-3 text-sm font-semibold text-ink-strong sm:col-start-2">
                   {attribution}
                 </figcaption>
               </figure>

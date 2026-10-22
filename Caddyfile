@@ -1,3 +1,23 @@
+# Cloudflare proxies both hosts. Requests reach Caddy from Cloudflare's edge,
+# so the visitor's address arrives in CF-Connecting-IP. Trust that header only
+# from Cloudflare's published ranges (https://www.cloudflare.com/ips/ — keep in
+# sync), so {client_ip} is the real visitor for proxied traffic and the TCP
+# peer for anything else (a spoofed header from elsewhere is ignored).
+{
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# Every upstream gets exactly one X-Forwarded-For value: the real visitor.
+# The API (TRUST_PROXY_HOPS=1) and the demo (CONCIERGE_BEHIND_PROXY) read it
+# for per-IP rate limits; with Cloudflare's edge address there instead, all
+# visitors behind one edge would share a limit.
+(to_app) {
+	header_up X-Forwarded-For {client_ip}
+}
+
 # HSTS on both hosts: everything here (Next, /demo, /paper.pdf, the API) is
 # https-only, so browsers should never try plain http again. Set in Caddy
 # rather than the apps so it also covers routes Next never serves.
@@ -24,15 +44,21 @@ nandaindex.org {
 	}
 	redir @demo_page /demo/ui/ 302
 	handle_path /demo/* {
-		reverse_proxy demo:8080
+		reverse_proxy demo:8080 {
+			import to_app
+		}
 	}
 
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy web:3000 {
+			import to_app
+		}
 	}
 }
 
 api.nandaindex.org {
 	import hsts
-	reverse_proxy server:3001
+	reverse_proxy server:3001 {
+		import to_app
+	}
 }

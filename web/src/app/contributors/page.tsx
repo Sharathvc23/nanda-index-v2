@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/PageShell";
+import { externalLinks } from "@/lib/site-data";
 
 type Person = {
   name: string;
@@ -25,7 +26,7 @@ const PAPERS: Paper[] = [
   {
     title:
       "A Global Switchboard for the Agentic Web: Connecting Discovery Islands Across Enterprises, SMBs, and Individuals",
-    href: "https://nandaindex.org/paper.pdf",
+    href: externalLinks.paper,
     authors: [
       { name: "Ramesh Raskar", organization: "MIT Media Lab and ProjectNANDA.org" },
       { name: "Pradyumna Chari", organization: "MIT Media Lab" },

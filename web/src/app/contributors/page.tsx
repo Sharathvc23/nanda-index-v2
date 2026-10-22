@@ -13,11 +13,12 @@ type Paper = {
 
 const CONTRIBUTORS: Person[] = [
   { name: "Ankit Kumar Nath", organization: "Nasiko and ProjectNANDA.org" },
+  { name: "Vedh Krishnan", organization: "MIT and ProjectNANDA.org" },
   { name: "Sharath Chandra", organization: "StellarMinds.ai and ProjectNANDA.org" },
   { name: "Umamaheswar Edara", organization: "ProjectNANDA.org" },
-  { name: "Vedh Krishnan", organization: "ProjectNANDA.org" },
   { name: "Chaman Singhal", organization: "Nasiko" },
   { name: "Gaurav Tiwari", organization: "Nasiko" },
+  { name: "Dario Fenoglio", organization: "MIT" },
 ];
 
 const PAPERS: Paper[] = [

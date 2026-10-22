@@ -1,0 +1,90 @@
+// Publish only quotes above the pending-confirmation section in the source document.
+// https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
+export const CONTRIBUTOR_QUOTES = [
+  {
+    text:
+      "Agents built by small businesses and individuals will soon outnumber enterprise agents, and most of them will never own a discovery endpoint. A combination of AI Catalog, ARD, and the thin resolution layer of NandaIndex will allow every agent to be found.",
+    attribution: "Sam Sharaf and Junjie Bu, Google ARD and ai-catalog",
+  },
+  {
+    text:
+      "The agentic web won’t run on one directory. It will be many independently operated registries and platforms, and agents have to be discoverable across all of them. AGNTCY’s Agent Directory and NandaIndex solve complementary halves of that problem, and doing it on open standards is how it scales.",
+    attribution: "Vijoy Pandey, SVP/GM, Outshift by Cisco",
+  },
+  {
+    text:
+      "From net neutrality to expanding broadband access, I have long believed that the internet works best when it is open, accessible, and trusted. MIT helped build the foundations of the World Wide Web in the 1990s. The research at MIT Media Lab along with many of our member companies over the last few years are now creating a DNS-like system for agent discovery and verifiable identity that can help make the emerging internet of AI agents open, inclusive, and safe.",
+    attribution: "Jessica Rosenworcel, Executive Director, MIT Media Lab",
+  },
+  {
+    text:
+      "The Neuro SAN framework at Cognizant enables networks of specialized AI agents to collaborate and solve complex enterprise problems. NandaIndex complements this vision by providing an open discovery and resolution layer, allowing agents built on different frameworks and platforms to find and collaborate with one another across organizational boundaries.",
+    attribution: "Babak Hodjat, CTO, Cognizant",
+  },
+  {
+    text:
+      "At Nutanix, we see enterprise AI evolving toward distributed agents operating across private clouds, public clouds, and edge environments. NandaIndex offers an open approach to agent discovery that enables interoperability independent of the underlying infrastructure.",
+    attribution: "Debo Dutta, Head of AI, Nutanix",
+  },
+  {
+    text:
+      "At Kyndryl, we have worked with MIT's NANDA ecosystem for 18 months. Our customers run mission-critical systems, so governance and trust come first. NandaIndex is an important step toward an open, interoperable, trusted agentic web, one that lets enterprises bring in public agents without exposing private agents or data.",
+    attribution: "Ilyas Iyoob, Global Head of Research, Kyndryl",
+  },
+  {
+    text:
+      "Merchants of every size should be able to participate in agentic commerce while keeping control of their data, customer relationships, and technology choices. Open, interoperable standards, and approaches like NandaIndex that make small-business agents easier to find across platforms, can lower the barrier for merchants to reach customers through any AI agent. It’s why any BigCommerce store with an active storefront can let AI agents search its catalog, build a cart, and hand off to the merchant’s own checkout through MCP.",
+    attribution: "Anil Kamath, Board Member, BigCommerce",
+  },
+  {
+    text:
+      "At Hello Haven, we believe personal AI agents should operate in an open ecosystem, not in the walled gardens that characterized the early internet, such as AOL. We are committed to making all Hello Haven agents discoverable through NandaIndex by default, enabling them to connect and collaborate with other personal, business, and enterprise agents across the open agentic web.",
+    attribution: "Frank Addante, Founder & Chief Human, Hello Haven",
+  },
+  {
+    text:
+      "AI agents need a verifiable identity to earn trust, and they need to be as easy to discover as a domain name, without their owners having to manage complex infrastructure. That's why Inkbox supports NandaIndex: anyone can register their agent and make it discoverable across the open agentic web.",
+    attribution: "Ray Liao, Founder and CEO, Inkbox",
+  },
+  {
+    text:
+      "From launching the first MCP servers integrated with NandaIndex in April 2025 to supporting MIT courses and students working on the earliest versions of the NANDA platform, ME-US has been part of this journey from the beginning. We believe NandaIndex can play a foundational role in enabling an open agentic web where businesses, developers, and individuals can connect and collaborate across platforms.",
+    attribution: "Zafer Sahinoglu, VP of Innovation, Mitsubishi Electric",
+  },
+  {
+    text:
+      "Nasiko has been a core contributor to NANDA, helping build the open infrastructure needed for AI agents to operate and collaborate across organizational boundaries. We believe the open agentic web must be supported by strong governance, secure agent runtimes, and verifiable identities, and NandaIndex is an important foundation for enabling agents to be discoverable, accountable, and trusted at scale.",
+    attribution: "Rahul Todkar, CEO and co-founder, Nasiko",
+  },
+  {
+    text:
+      "At Tata Consultancy Services (TCS), we believe the future of enterprise AI depends on agents collaborating seamlessly across organizations, industries, and platforms. NandaIndex provides an open foundation for agent discovery and interoperability, enabling enterprises to participate in a connected and trusted agentic web.",
+    attribution: "Harrick Vin, CTO, TCS",
+  },
+  {
+    text:
+      "At HCLTech, we see Agentic AI becoming integral to how enterprises operate, collaborate, and serve customers. As organizations deploy agents across different clouds, platforms, and business ecosystems, open discovery and interoperability will be essential. NandaIndex offers a promising approach to connecting these agents across organizational boundaries while preserving enterprise control, security, and governance.",
+    attribution: "Vijay Guntur, CTO, HCLTech",
+  },
+  {
+    text:
+      "For the agentic economy to scale, AI agents need cross-platform interoperability. At Hexaware, our collaboration with the open-source Project NANDA reflects that commitment — and NandaIndex is a practical step toward making AI agents accessible, safe, and useful across industries, organizations, and communities.",
+    attribution: "Erik Haug, Global Head of AI Partnerships, Hexaware Technologies",
+  },
+  {
+    text:
+      "By our research, 99 percent of the web isn't ready for AI agents, and most agents fail before they ever reach the business they're looking for. Discovery is where the agentic web breaks first. We need to reinvent it for agents, not retrofit search-era methods. NandaIndex takes a bold step in that direction, making businesses and individuals discoverable by any agent, without requiring their own infrastructure. It complements open standards like ARD and MCP Apps that we're helping build, and we're excited to work with the NANDA team to bring this vision to life.",
+    attribution: "Liad Yosef, Co-founder & CTO, Ora",
+  },
+  {
+    text:
+      "Having contributed to the evolution of the internet from IP-based mobile networks to 5G and beyond, I see the emergence of AI agents as another important step in how networks connect people, businesses, and intelligent systems. At Ericsson, we have been working with MIT and NANDA to advance this vision, and NandaIndex provides a promising foundation for open agent discovery, interoperability, and trusted coordination across the emerging agentic web.",
+    attribution: "Mallik Tatipamula, CTO, Ericsson Silicon Valley",
+  },
+  {
+    text:
+      "Finding an AI agent and trusting it are two different problems, and the agentic web needs both solved. WorkOS is building the identity and authorization layer for agents, while NandaIndex provides an open approach to discovery across platforms and organizations.",
+    attribution: "Michael Grinich, Founder & CEO, WorkOS",
+  },
+] as const;
+

@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/PageShell";
+import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
 import { externalLinks } from "@/lib/site-data";
 
 type Person = {
@@ -20,6 +21,7 @@ const CONTRIBUTORS: Person[] = [
   { name: "Chaman Singhal", organization: "Nasiko" },
   { name: "Gaurav Tiwari", organization: "Nasiko" },
   { name: "Dario Fenoglio", organization: "MIT" },
+  { name: "Karthik Sreedhar", organization: "MIT" },
 ];
 
 const PAPERS: Paper[] = [
@@ -114,24 +116,60 @@ export default function ContributorsPage() {
       title="Contributors"
       description="Nanda Index is being designed, reviewed, and supported by agent builders."
     >
+      <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <a href="#community-perspectives" className="text-brand-600 hover:text-brand-700 hover:underline">
+          Community perspectives
+        </a>
+        <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
+          Research authors
+        </a>
+        <a href="#contributors" className="text-brand-600 hover:text-brand-700 hover:underline">
+          Contributors
+        </a>
+      </nav>
       <div className="max-w-3xl space-y-12">
-        {PAPERS.map((paper) => (
-          <section key={paper.href}>
-            <h2 className="mb-4 font-display text-lg font-semibold text-ink-strong">
-              <a
-                href={paper.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-600 hover:text-brand-700 transition-colors"
-              >
-                {paper.title} <span aria-hidden="true">↗</span>
-              </a>
-            </h2>
-            <PeopleTable caption={`Authors of ${paper.title}`} people={paper.authors} />
-          </section>
-        ))}
+        <section id="community-perspectives" aria-labelledby="community-perspectives-heading" className="scroll-mt-24">
+          <h2 id="community-perspectives-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
+            Community perspectives
+          </h2>
+          <div className="space-y-8">
+            {CONTRIBUTOR_QUOTES.map(({ text, attribution }) => (
+              <figure key={attribution} className="border-l-2 border-brand-300 pl-5">
+                <blockquote className="text-sm leading-relaxed text-ink">
+                  <p>“{text}”</p>
+                </blockquote>
+                <figcaption className="mt-3 text-sm font-semibold text-ink-strong">
+                  {attribution}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
 
-        <section>
+        <section id="research-authors" aria-labelledby="research-authors-heading" className="scroll-mt-24">
+          <h2 id="research-authors-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
+            Research authors
+          </h2>
+          <div className="space-y-12">
+            {PAPERS.map((paper) => (
+              <section key={paper.href}>
+                <h3 className="mb-4 font-display text-lg font-semibold text-ink-strong">
+                  <a
+                    href={paper.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-600 hover:text-brand-700 transition-colors"
+                  >
+                    {paper.title} <span aria-hidden="true">↗</span>
+                  </a>
+                </h3>
+                <PeopleTable caption={`Authors of ${paper.title}`} people={paper.authors} />
+              </section>
+            ))}
+          </div>
+        </section>
+
+        <section id="contributors" className="scroll-mt-24">
           <h2 className="mb-4 font-display text-lg font-semibold text-ink-strong">
             Contributors
           </h2>

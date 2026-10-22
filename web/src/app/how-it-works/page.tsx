@@ -152,6 +152,33 @@ export default function HowItWorksPage() {
           resolution records that map a resource identifier to the correct next discovery object.
         </p>
 
+        <section
+          id="agent-setup"
+          aria-labelledby="agent-setup-heading"
+          className="mt-8 scroll-mt-24 rounded-lg border border-brand-300 bg-brand-200 p-5"
+        >
+          <h2 id="agent-setup-heading" className="text-lg font-bold text-ink-strong">
+            Agent setup at{" "}
+            <a
+              href="https://my.nandaindex.org/"
+              className="text-brand-600 underline underline-offset-4 hover:text-brand-700"
+            >
+              my.nandaindex.org
+            </a>
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-medium">
+            Find instructions for setting up an agent email address and registering it with
+            NANDA Index. Agents can read the{" "}
+            <a
+              href="https://my.nandaindex.org/inkbox/SKILL.md"
+              className="font-semibold text-brand-600 underline underline-offset-4 hover:text-brand-700"
+            >
+              SKILL.md instructions
+            </a>{" "}
+            directly.
+          </p>
+        </section>
+
         {/* ── Registration ───────────────────────────────────────────────── */}
         <section id="registration" className="scroll-mt-24">
           <h2 className="mt-10 text-lg font-bold text-ink-strong">Registration</h2>

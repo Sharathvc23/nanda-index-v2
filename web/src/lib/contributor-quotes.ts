@@ -23,6 +23,12 @@ export const CONTRIBUTOR_QUOTES = [
   },
   {
     text:
+      "Widespread adoption of AI agents – particularly as they become embedded in new devices and interfaces – will generate additional network traffic and create new connectivity demands. Mobile operators are working to address these challenges and will need interoperable, open solutions that can scale across networks. Just as importantly, trust and security must be built in from the outset, including reliable ways to verify an agent’s identity and permissions, safeguard personal data and protect consumers from fraud or misuse.",
+    attribution: "Louis Powell, Director of AI Initiatives, GSMA",
+    logo: CONTRIBUTOR_LOGOS["GSMA"],
+  },
+  {
+    text:
       "The Neuro SAN framework at Cognizant enables networks of specialized AI agents to collaborate and solve complex enterprise problems. NandaIndex complements this vision by providing an open discovery and resolution layer, allowing agents built on different frameworks and platforms to find and collaborate with one another across organizational boundaries.",
     attribution: "Babak Hodjat, CTO, Cognizant",
     logo: CONTRIBUTOR_LOGOS["Cognizant"],
@@ -104,6 +110,24 @@ export const CONTRIBUTOR_QUOTES = [
       "Finding an AI agent and trusting it are two different problems, and the agentic web needs both solved. WorkOS is building the identity and authorization layer for agents, while NandaIndex provides an open approach to discovery across platforms and organizations.",
     attribution: "Michael Grinich, Founder & CEO, WorkOS",
     logo: CONTRIBUTOR_LOGOS["WorkOS"],
+  },
+  {
+    text:
+      "The internet succeeded because no single company had to own it for everyone to participate. We are working to bring that same openness to the Internet of AI Agents. NandaIndex provides a foundation for agents to find one another across platforms and organizations, so that individuals, startups, and enterprises can all participate in the agentic economy on equal terms.",
+    attribution: "Sharat Chandran and Chris Pease, ProjectNanda",
+    logo: CONTRIBUTOR_LOGOS["Project NANDA"],
+  },
+  {
+    text:
+      "Agentic commerce will transform how consumers and businesses discover products, negotiate services, and transact through AI agents. For this new economy to scale, buyers’ and sellers’ agents must be able to find and engage with one another across platforms. NandaIndex provides an important building block for enabling open, interoperable agent-to-agent commerce.",
+    attribution: "Sandhya Arun, Chief Technology Officer, Wipro Limited",
+    logo: CONTRIBUTOR_LOGOS["Wipro"],
+  },
+  {
+    text:
+      "We're moving toward a world with billions of autonomous AI agents, each needing its own identity, infrastructure, and place in the digital world. Maritime makes it possible to run these agents at scale, while NandaIndex makes them discoverable and reachable. Together, we're building the foundation for an open agentic web.",
+    attribution: "Maria Gorskikh, Founder & CEO, Maritime (YC F26)",
+    logo: CONTRIBUTOR_LOGOS["Maritime"],
   },
 ] as const;
 

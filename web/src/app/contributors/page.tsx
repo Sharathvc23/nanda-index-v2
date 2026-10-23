@@ -26,13 +26,7 @@ const CONTRIBUTORS: Person[] = [
   { name: "Karthik Sreedhar", organization: "MIT" },
 ];
 
-const OTHER_ORGANIZATION_LOGOS = [
-  CONTRIBUTOR_LOGOS.Akamai,
-  CONTRIBUTOR_LOGOS["Project NANDA"],
-  CONTRIBUTOR_LOGOS.GSMA,
-  CONTRIBUTOR_LOGOS.Snowflake,
-  CONTRIBUTOR_LOGOS.Maritime,
-];
+const OTHER_ORGANIZATION_LOGOS = [CONTRIBUTOR_LOGOS.Akamai];
 
 const PAPERS: Paper[] = [
   {

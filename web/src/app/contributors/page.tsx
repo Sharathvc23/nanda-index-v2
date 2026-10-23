@@ -1,6 +1,5 @@
 import Image from "next/image";
 import { PageShell } from "@/components/PageShell";
-import { CONTRIBUTOR_LOGOS } from "@/lib/contributor-logos";
 import { CONTRIBUTOR_QUOTES } from "@/lib/contributor-quotes";
 import { externalLinks } from "@/lib/site-data";
 
@@ -25,8 +24,6 @@ const CONTRIBUTORS: Person[] = [
   { name: "Dario Fenoglio", organization: "MIT" },
   { name: "Karthik Sreedhar", organization: "MIT" },
 ];
-
-const OTHER_ORGANIZATION_LOGOS = [CONTRIBUTOR_LOGOS.Akamai];
 
 const PAPERS: Paper[] = [
   {
@@ -124,9 +121,6 @@ export default function ContributorsPage() {
         <a href="#community-perspectives" className="text-brand-600 hover:text-brand-700 hover:underline">
           Community perspectives
         </a>
-        <a href="#other-organizations" className="text-brand-600 hover:text-brand-700 hover:underline">
-          Other organizations
-        </a>
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
           Research authors
         </a>
@@ -163,26 +157,6 @@ export default function ContributorsPage() {
               </figure>
             ))}
           </div>
-        </section>
-
-        <section id="other-organizations" aria-labelledby="other-organizations-heading" className="scroll-mt-24">
-          <h2 id="other-organizations-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
-            Other organizations
-          </h2>
-          <ul className="flex flex-wrap gap-4">
-            {OTHER_ORGANIZATION_LOGOS.map(({ name, src, width, height }) => (
-              <li key={src} className="flex h-20 w-32 items-center justify-center rounded-md bg-white px-2">
-                <Image
-                  src={src}
-                  alt={name}
-                  width={width}
-                  height={height}
-                  sizes="112px"
-                  className="h-16 w-full object-contain"
-                />
-              </li>
-            ))}
-          </ul>
         </section>
 
         <section id="research-authors" aria-labelledby="research-authors-heading" className="scroll-mt-24">

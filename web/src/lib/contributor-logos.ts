@@ -1,10 +1,9 @@
-// Original logos from the source document or official company websites, excluding Google and Snowflake.
+// Original logos from the source document or official company websites.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
 // Wipro's logo is from https://www.wipro.com/content/dam/wipro/social-icons/wipro_new_logo.svg
 // Wand AI's logo is from https://wand.ai/assets/wand-wordmark-light-violet.svg
 export const CONTRIBUTOR_LOGOS = {
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
-  "Akamai": { name: "Akamai", src: "/contributors/logos/akamai.png", width: 701, height: 285 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },
   "GSMA": { name: "GSMA", src: "/contributors/logos/gsma.png", width: 738, height: 240 },
   "Nasiko": { name: "Nasiko", src: "/contributors/logos/nasiko.png", width: 417, height: 120 },

@@ -1,6 +1,6 @@
 import { CONTRIBUTOR_LOGOS } from "@/lib/contributor-logos";
 
-// Publish only quotes above the pending-confirmation section in the source document.
+// Publish only quotes approved in the source document or explicitly supplied for publication.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
 export const CONTRIBUTOR_QUOTES = [
   {
@@ -128,6 +128,12 @@ export const CONTRIBUTOR_QUOTES = [
       "We're moving toward a world with billions of autonomous AI agents, each needing its own identity, infrastructure, and place in the digital world. Maritime makes it possible to run these agents at scale, while NandaIndex makes them discoverable and reachable. Together, we're building the foundation for an open agentic web.",
     attribution: "Maria Gorskikh, Founder & CEO, Maritime (YC F26)",
     logo: CONTRIBUTOR_LOGOS["Maritime"],
+  },
+  {
+    text:
+      "We are entering an era in which AI is becoming a new form of productive labor, fundamentally transforming how companies, institutions, and entire economies operate. At Wand AI, we are defining and building this future through autonomous AI workers, a unified operating system for human and artificial intelligence, and the infrastructure required to integrate AI labor into national economies. As billions of AI agents emerge across organizations and countries, open discovery and interoperability become essential. Initiatives such as NandaIndex represent an important step toward connecting these independently governed AI workforces and enabling a truly global agentic economy.",
+    attribution: "Rotem Alaluf, Founder & CEO, Wand AI",
+    logo: CONTRIBUTOR_LOGOS["Wand AI"],
   },
 ] as const;
 

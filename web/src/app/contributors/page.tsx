@@ -143,7 +143,7 @@ export default function ContributorsPage() {
             {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo }) => (
               <figure key={attribution} className="grid gap-x-6 sm:grid-cols-[8rem_minmax(0,1fr)]">
                 {logo ? (
-                  <div className="mb-4 flex h-20 w-32 items-center justify-center self-start rounded-md bg-white px-2 sm:row-span-2 sm:mb-0">
+                  <div className={`mb-4 flex h-20 w-32 items-center justify-center self-start rounded-md px-2 sm:row-span-2 sm:mb-0 ${logo.name === "Wand AI" ? "bg-slate-950" : "bg-white"}`}>
                     <Image
                       src={logo.src}
                       alt={logo.name}

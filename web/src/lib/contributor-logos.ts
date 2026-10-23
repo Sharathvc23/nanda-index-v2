@@ -1,6 +1,7 @@
-// Original logo images from the contributors source document, excluding Google and Snowflake.
+// Original logos from the source document or official company websites, excluding Google and Snowflake.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
 // Wipro's logo is from https://www.wipro.com/content/dam/wipro/social-icons/wipro_new_logo.svg
+// Wand AI's logo is from https://wand.ai/assets/wand-wordmark-light-violet.svg
 export const CONTRIBUTOR_LOGOS = {
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Akamai": { name: "Akamai", src: "/contributors/logos/akamai.png", width: 701, height: 285 },
@@ -23,4 +24,5 @@ export const CONTRIBUTOR_LOGOS = {
   "WorkOS": { name: "WorkOS", src: "/contributors/logos/workos.png", width: 374, height: 225 },
   "MIT Media Lab": { name: "MIT Media Lab", src: "/contributors/logos/mit-media-lab.png", width: 284, height: 177 },
   "Wipro": { name: "Wipro", src: "/contributors/logos/wipro.svg", width: 393.35, height: 157.54 },
+  "Wand AI": { name: "Wand AI", src: "/contributors/logos/wand-ai.svg", width: 3120, height: 868 },
 } as const;

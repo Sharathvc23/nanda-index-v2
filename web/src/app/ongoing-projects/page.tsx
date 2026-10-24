@@ -3,24 +3,21 @@ import { PageShell } from "@/components/PageShell";
 type ProjectLink = {
   title: string;
   href: string;
-  detail: string;
+  detail?: string;
 };
 
 const PROJECTS: ProjectLink[] = [
   {
     title: "Project NANDA",
     href: "https://projectnanda.org",
-    detail: "The main Project NANDA site.",
   },
   {
     title: "Nanda Town",
     href: "https://nandatown.projectnanda.org",
-    detail: "Composable agent services built on the NANDA stack.",
   },
   {
     title: "NANDA at MIT",
     href: "https://nanda.mit.edu",
-    detail: "The NANDA project at MIT.",
   },
   {
     title: "Agentic Resource Discovery (ARD)",
@@ -31,7 +28,7 @@ const PROJECTS: ProjectLink[] = [
     title: "AI Catalog",
     href: "https://ai-catalog.io/",
     detail:
-      "A typed, nestable, machine-readable container for heterogeneous AI resources.",
+      "AI Catalog provides a structured, extensible format for describing heterogeneous AI resources.",
   },
   {
     title: "MIT Media Lab publication",
@@ -49,7 +46,7 @@ const PROJECTS: ProjectLink[] = [
     title: "KumbhDoot",
     href: "https://www.kumbhdoot.org/docs/KumbhDoot_Proposal.pdf",
     detail:
-      "Every pilgrim empowered with a personal AI agent and civic AI services at Nashik Kumbh Mela 2027.",
+      "Proposal for Nashik Kumbh Mela 2027.",
   },
   {
     title: "DigiDoot",
@@ -82,9 +79,11 @@ export default function OngoingProjectsPage() {
             >
               {link.title} <span aria-hidden="true">↗</span>
             </a>
-            <p className="mt-0.5 text-sm leading-relaxed text-ink-medium">
-              {link.detail}
-            </p>
+            {link.detail ? (
+              <p className="mt-0.5 text-sm leading-relaxed text-ink-medium">
+                {link.detail}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>

@@ -225,7 +225,7 @@ export default function ResolvePage() {
   return (
     <PageShell
       title="Resolve Agent"
-      description="Enter a URN to trace the full resolution path — from index to agent source to agent card to invocation."
+      description="Resolve a resource identifier to the appropriate discovery entry point."
     >
       {/* Search bar */}
       <form onSubmit={onResolve} className="mb-8 flex gap-3">
@@ -257,7 +257,7 @@ export default function ResolvePage() {
             <HopCard
               n={1}
               label="NANDA Index"
-              subtitle="Which discovery entry point serves this identifier? Returns an IndexRecord with a catalog or card URL."
+              subtitle="Each entry points to the correct next discovery object for a given resource identifier."
               hop={hop1}
             />
 
@@ -268,7 +268,7 @@ export default function ResolvePage() {
                 <HopCard
                   n={2}
                   label="Agent Source"
-                  subtitle="What is this specific agent's facts URL? Returns a CatalogEntry."
+                  subtitle="The requester follows the discovery path specified by the entry."
                   hop={hop2}
                 />
 
@@ -279,7 +279,7 @@ export default function ResolvePage() {
                     <HopCard
                       n={3}
                       label="Agent Card"
-                      subtitle="Full agent capabilities, authentication, skills, and runtime endpoint."
+                      subtitle="A2A Agent Cards define how to interact with individual agents."
                       hop={hop3}
                     />
 
@@ -290,7 +290,7 @@ export default function ResolvePage() {
                         <HopCard
                           n={4}
                           label="Talk with agent"
-                          subtitle="Send a task directly to the agent runtime."
+                          subtitle="Invoke the selected resource through its supported protocol."
                           hop={hop4}
                         >
                           {agentRunUrl && hop4.status !== "skipped" && (

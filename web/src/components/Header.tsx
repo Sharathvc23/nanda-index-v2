@@ -53,7 +53,6 @@ export function Header() {
           <span aria-hidden="true" className="hidden sm:block h-6 border-l border-line" />
           <span className="hidden sm:flex flex-col leading-tight min-w-0">
             <span className="font-semibold text-ink-strong truncate">Nanda Index</span>
-            <span className="text-xs text-ink-weak truncate">Agent identity &amp; discovery</span>
           </span>
         </Link>
 

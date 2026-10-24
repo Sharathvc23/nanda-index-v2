@@ -242,7 +242,7 @@ export default function ExplorePage() {
           ) : rows.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="bg-surface-light rounded-card border border-line/70 shadow-card p-6 max-w-md text-center">
-                <p className="text-sm text-ink-medium">No org/registrys registered yet.</p>
+                <p className="text-sm text-ink-medium">No index records are registered yet.</p>
               </div>
             </div>
           ) : filtered.length === 0 ? (

@@ -476,7 +476,7 @@ export default function NewOrgPage() {
               </span>
               <PathCard value="registry" selected={form.hosting_path} onSelect={patchPath}
                 title="Enterprise AI Catalog" subtitle="Teams / Orgs"
-                description="Run your own nanda-ai-catalog. Full control over your AI catalog." />
+                description="Publish an AI Catalog at a well-known endpoint under your domain." />
               <PathCard value="dns-svcb" selected={form.hosting_path} onSelect={patchPath}
                 title="DNS SVCB" subtitle="Enterprise / DNS"
                 description="Your agent is discoverable via DNS service binding (SVCB, RFC 9460). NandaIndex acts as a federated pointer." />
@@ -485,7 +485,7 @@ export default function NewOrgPage() {
                 description="You own a domain but don't run infrastructure. Host your agent card on host39.org." />
               <PathCard value="personal" selected={form.hosting_path} onSelect={patchPath}
                 title="Personal Agent" subtitle="Individual"
-                description="No domain needed. Your verified email is your identity, anchored at host39.org." />
+                description="No personally controlled domain is required. The account identity must be verifiably bound to the resolution record." />
             </div>
 
             <Field label="Org ID" value={form.org_id} onChange={(v) => patch("org_id", v)}

@@ -5,81 +5,59 @@ export default function HomePage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div className="space-y-5 text-base leading-relaxed text-ink-medium">
         <p>
-          Software agents are increasingly able to discover, compose, and invoke
-          one another’s capabilities across organizational boundaries, but the
-          mechanisms used to discover them are diverging, a natural consequence
-          of innovation across different communities, use cases, and deployment
-          environments. AI Catalog is a strong starting point for public
-          enterprise discovery. It provides a typed, nestable, machine-readable
-          container for heterogeneous AI resources: A2A Agent Cards, MCP server
-          descriptors, nested catalogs, tools, skills, gateways, and other AI
-          resources.
+          The agentic web is an emerging layer of the internet in which
+          autonomous and semi-autonomous software agents discover, compose, and
+          invoke capabilities across organizational and technological boundaries.
+          Enterprises, platforms, and developer communities have each adopted
+          different systems, including AI Catalogs, DNS-based service discovery,
+          enterprise gateways, agent descriptors such as A2A Agent Cards and MCP
+          servers, and a growing set of platform, telecom, and sector-specific
+          registries.
         </p>
 
         <p>
-          But AI Catalog alone does not connect the wider ecosystem. Enterprises
-          also rely on DNS-based service discovery, gateways, and platform
-          registries, while telecom directories, EdgeAI and IoT systems, and
-          sovereign or sector-specific registries continue to emerge. These
-          approaches are valuable, the product of real innovation, and each is
-          authoritative within its own domain. Left unconnected, however, they
-          form discovery islands.
+          Each system is authoritative within its own domain, but no common
+          layer connects them. This fragments the ecosystem into isolated
+          discovery islands and prevents agents from finding and using
+          capabilities across boundaries.
         </p>
 
         <p>
-          NandaIndex is a Federated Resolution Architecture that acts as a global
-          switchboard. Given a stable resource identifier, it determines which
-          discovery mechanism a requester should use, then defers to that
-          mechanism. It reuses the AI Catalog format as its record type, so it
-          introduces no new schema, and connected systems do not need to adopt AI
-          Catalog internally. NandaIndex complements discovery protocols such as
-          ARD and federated infrastructure such as the AGNTCY Agent Directory. It
-          builds on the switchboard proposed by NANDA and AGNTCY, developed
-          jointly by Outshift (Cisco), MIT Media Lab and Nasiko, and extends that model
-          with improvements to AI Catalog.
+          NandaIndex is an AI Catalog-formatted federation layer that maps a
+          stable resource identifier to the appropriate discovery object, whether
+          an AI Catalog, a DNS-based service-discovery path, a gateway, a platform
+          registry, or a hosted agent card. It functions as a global switchboard:
+          it does not replace existing discovery systems but routes requesters to
+          them.
         </p>
 
         <p>
-          Simple cases stay simple. An enterprise that publishes an AI Catalog at
-          a well-known endpoint and owns its domain resolves directly, and
-          NandaIndex stays out of the critical path. NandaIndex is a distributed
-          index of pointers, not a centralized registry, and adds value where
-          direct resolution is unavailable:
+          For enterprises that publish AI Catalog at a well-known endpoint and
+          own the domain, direct resolution already works. NandaIndex is not in
+          the critical path. Small businesses can distribute runtime, agent card,
+          and domain across separate providers and still be resolved from one
+          resource identifier. NandaIndex enables identity-first discovery for
+          individuals, when the underlying account identity is verifiably bound
+          to the resolution record.
         </p>
-
-        <ul className="list-disc space-y-3 pl-6">
+        <p>
+          Several questions remain open, and we expect future work to address
+          them:
+        </p>
+        <ul className="list-disc space-y-2 pl-6">
+          <li>Refining resolution semantics and identity models.</li>
+          <li>Strengthening trust, verification, and policy mechanisms.</li>
           <li>
-            <strong>Enterprise heterogeneity</strong>, where companies use
-            DNS-based service discovery, gateways, or legacy registries instead
-            of a published AI Catalog.
+            Standardizing the interfaces between the resolution, discovery, and
+            infrastructure layers.
           </li>
           <li>
-            <strong>SMBs</strong> such as Moon Bakery, whose website may be on
-            Wix, Squarespace, or Shopify, whose agent runs on AWS, and whose
-            agent card is hosted by a third party such as host39.org.
-          </li>
-          <li>
-            <strong>Individuals</strong> such as john@hotmail.com, who do not own
-            a domain, with a personal agent on AWS, Azure, GCP, or another
-            provider and an agent card hosted elsewhere, discoverable when their
-            account identity is verifiably bound to the resolution record.
+            Supporting richer query routing and multi-hop resolution across
+            federated systems.
           </li>
         </ul>
-
-        <p>
-          NandaIndex presents an architecture proposal and initial design. It
-          identifies the missing bootstrap layer between resource identifiers and
-          discovery, defines the role of NandaIndex within that layer, and
-          outlines the identity, trust, and federation mechanisms that must be
-          formalized.
-        </p>
       </div>
-
-      <p className="mt-10 text-sm text-ink-medium">
-        The reference implementation is on GitHub, and you can host your own agent facts on host39.org.
-      </p>
-
-      <div className="mt-3 flex flex-wrap gap-3">
+      <div className="mt-10 flex flex-wrap gap-3">
         <a
           href={externalLinks.paper}
           target="_blank"

@@ -115,12 +115,9 @@ export default function ContributorsPage() {
   return (
     <PageShell
       title="Contributors"
-      description="Nanda Index is being designed, reviewed, and supported by agent builders."
+      description="Nanda Index is being designed, reviewed, and supported by a large collective."
     >
       <nav aria-label="On this page" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <a href="#community-perspectives" className="text-brand-600 hover:text-brand-700 hover:underline">
-          Community perspectives
-        </a>
         <a href="#research-authors" className="text-brand-600 hover:text-brand-700 hover:underline">
           Research authors
         </a>
@@ -129,10 +126,7 @@ export default function ContributorsPage() {
         </a>
       </nav>
       <div className="max-w-3xl space-y-12">
-        <section id="community-perspectives" aria-labelledby="community-perspectives-heading" className="scroll-mt-24">
-          <h2 id="community-perspectives-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">
-            Community perspectives
-          </h2>
+        <div id="community-perspectives" className="scroll-mt-24">
           <div className="space-y-8">
             {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo, post }) => (
               <figure key={attribution} className="grid gap-x-6 sm:grid-cols-[8rem_minmax(0,1fr)]">
@@ -167,7 +161,7 @@ export default function ContributorsPage() {
               </figure>
             ))}
           </div>
-        </section>
+        </div>
 
         <section id="research-authors" aria-labelledby="research-authors-heading" className="scroll-mt-24">
           <h2 id="research-authors-heading" className="mb-6 font-display text-lg font-semibold text-ink-strong">

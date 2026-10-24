@@ -36,6 +36,10 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "Widespread adoption of AI agents – particularly as they become embedded in new devices and interfaces – will generate additional network traffic and create new connectivity demands. Mobile operators are working to address these challenges and will need interoperable, open solutions that can scale across networks. Just as importantly, trust and security must be built in from the outset, including reliable ways to verify an agent’s identity and permissions, safeguard personal data and protect consumers from fraud or misuse.",
     attribution: "Louis Powell, Director of AI Initiatives, GSMA",
     logo: CONTRIBUTOR_LOGOS["GSMA"],
+    post: {
+      title: "GSMA: Connecting the Mobile World to the Open Agentic Web",
+      href: "https://lnkd.in/p/gAz42Dzm",
+    },
   },
   {
     text:

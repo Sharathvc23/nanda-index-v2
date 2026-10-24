@@ -1,8 +1,18 @@
 import { CONTRIBUTOR_LOGOS } from "@/lib/contributor-logos";
 
+type ContributorQuote = {
+  text: string;
+  attribution: string;
+  logo: (typeof CONTRIBUTOR_LOGOS)[keyof typeof CONTRIBUTOR_LOGOS] | null;
+  post?: {
+    title: string;
+    href: string;
+  };
+};
+
 // Publish only quotes approved in the source document or explicitly supplied for publication.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
-export const CONTRIBUTOR_QUOTES = [
+export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   {
     text:
       "Agents built by small businesses and individuals will soon outnumber enterprise agents, and most of them will never own a discovery endpoint. A combination of AI Catalog, ARD, and the thin resolution layer of NandaIndex will allow every agent to be found.",
@@ -134,6 +144,10 @@ export const CONTRIBUTOR_QUOTES = [
       "We are entering an era in which AI is becoming a new form of productive labor, fundamentally transforming how companies, institutions, and entire economies operate. At Wand AI, we are defining and building this future through autonomous AI workers, a unified operating system for human and artificial intelligence, and the infrastructure required to integrate AI labor into national economies. As billions of AI agents emerge across organizations and countries, open discovery and interoperability become essential. Initiatives such as NandaIndex represent an important step toward connecting these independently governed AI workforces and enabling a truly global agentic economy.",
     attribution: "Rotem Alaluf, Founder & CEO, Wand AI",
     logo: CONTRIBUTOR_LOGOS["Wand AI"],
+    post: {
+      title: "Wand AI: An Open Agentic Web Needs Open Discovery",
+      href: "https://lnkd.in/p/gsX4NqKp",
+    },
   },
-] as const;
+];
 

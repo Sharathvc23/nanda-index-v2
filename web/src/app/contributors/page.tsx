@@ -134,7 +134,7 @@ export default function ContributorsPage() {
             Community perspectives
           </h2>
           <div className="space-y-8">
-            {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo }) => (
+            {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo, post }) => (
               <figure key={attribution} className="grid gap-x-6 sm:grid-cols-[8rem_minmax(0,1fr)]">
                 {logo ? (
                   <div className={`mb-4 flex h-20 w-32 items-center justify-center self-start rounded-md px-2 sm:row-span-2 sm:mb-0 ${logo.name === "Wand AI" ? "bg-slate-950" : "bg-white"}`}>
@@ -153,6 +153,16 @@ export default function ContributorsPage() {
                 </blockquote>
                 <figcaption className="border-l-2 border-brand-300 pl-5 pt-3 text-sm font-semibold text-ink-strong sm:col-start-2">
                   {attribution}
+                  {post ? (
+                    <a
+                      href={post.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block font-normal text-brand-600 underline underline-offset-4 hover:text-brand-700"
+                    >
+                      {post.title} <span aria-hidden="true">↗</span>
+                    </a>
+                  ) : null}
                 </figcaption>
               </figure>
             ))}

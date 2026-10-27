@@ -177,5 +177,17 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     attribution: "Piyush Jain, Deputy CTO, L&T Technology Services (LTTS)",
     logo: CONTRIBUTOR_LOGOS["L&T Technology Services"],
   },
+  {
+    text:
+      "At Nebius, we believe the next generation of AI infrastructure must make it easy to move from powerful models to reliable, production-ready AI agents. Our work on Nebius AI Cloud, Token Factory, and AI-powered infrastructure management is helping developers make that transition. But a truly open agentic ecosystem also needs ways for agents running on different clouds and platforms to discover one another. NandaIndex is an important initiative toward making that interoperability possible.",
+    attribution: "Narek Tatevosyan, VP of Product, Nebius",
+    logo: CONTRIBUTOR_LOGOS["Nebius"],
+  },
+  {
+    text:
+      "The emerging Internet of AI Agents raises important questions about discovery, identity, interoperability, and accountability. I would like to see the community develop a shared understanding of the desirable properties of this infrastructure. The NandaIndex initiative offers a useful forum for exploring these questions and developing open, interoperable approaches.",
+    attribution: "Vint Cerf, Internet Pioneer and Co-Designer of TCP/IP",
+    logo: null,
+  },
 ];
 

@@ -6,6 +6,7 @@
 // TinyFish's logo is from https://www.tinyfish.ai/TF-Logos/Horizontal%20Logo/SVG/TF_Horizontal.svg
 // AGI House's logo is from https://www.agihouse.org/imgs/AGIHouseFullLogo.svg
 // LTTS's logo was supplied and approved with its quote.
+// Nebius's logo is from https://nebius.com/logo.svg
 export const CONTRIBUTOR_LOGOS = {
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },
@@ -32,4 +33,5 @@ export const CONTRIBUTOR_LOGOS = {
   "TinyFish": { name: "TinyFish", src: "/contributors/logos/tinyfish.svg", width: 731, height: 166 },
   "AGI House": { name: "AGI House", src: "/contributors/logos/agi-house.svg", width: 628, height: 120 },
   "L&T Technology Services": { name: "L&T Technology Services", src: "/contributors/logos/ltts.png", width: 732, height: 273 },
+  "Nebius": { name: "Nebius", src: "/contributors/logos/nebius.svg", width: 131, height: 36 },
 } as const;

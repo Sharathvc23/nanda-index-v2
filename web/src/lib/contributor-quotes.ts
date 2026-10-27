@@ -134,7 +134,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   {
     text:
       "The internet succeeded because no single company had to own it for everyone to participate. We are working to bring that same openness to the Internet of AI Agents. NandaIndex provides a foundation for agents to find one another across platforms and organizations, so that individuals, startups, and enterprises can all participate in the agentic economy on equal terms.",
-    attribution: "Sharat Chandran and Chris Pease, ProjectNanda",
+    attribution: "Sharath Chandra and Chris Pease, ProjectNanda",
     logo: CONTRIBUTOR_LOGOS["Project NANDA"],
   },
   {

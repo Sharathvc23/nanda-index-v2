@@ -33,6 +33,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
+    attribution: "Arjun Chittoor, VP, PayPal",
+    logo: CONTRIBUTOR_LOGOS["PayPal"],
+  },
+  {
+    text:
       "Widespread adoption of AI agents – particularly as they become embedded in new devices and interfaces – will generate additional network traffic and create new connectivity demands. Mobile operators are working to address these challenges and will need interoperable, open solutions that can scale across networks. Just as importantly, trust and security must be built in from the outset, including reliable ways to verify an agent’s identity and permissions, safeguard personal data and protect consumers from fraud or misuse.",
     attribution: "Louis Powell, Director of AI Initiatives, GSMA",
     logo: CONTRIBUTOR_LOGOS["GSMA"],

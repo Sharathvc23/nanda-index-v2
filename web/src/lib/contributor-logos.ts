@@ -1,7 +1,11 @@
-// Original logos from the source document or official company websites.
+// Original logos from the source document, approved correspondence, or official company websites.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
 // Wipro's logo is from https://www.wipro.com/content/dam/wipro/social-icons/wipro_new_logo.svg
 // Wand AI's logo is from https://wand.ai/assets/wand-wordmark-light-violet.svg
+// Suki's logo is the inline header SVG from https://www.suki.ai/
+// TinyFish's logo is from https://www.tinyfish.ai/TF-Logos/Horizontal%20Logo/SVG/TF_Horizontal.svg
+// AGI House's logo is from https://www.agihouse.org/imgs/AGIHouseFullLogo.svg
+// LTTS's logo was supplied and approved with its quote.
 export const CONTRIBUTOR_LOGOS = {
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },
@@ -24,4 +28,8 @@ export const CONTRIBUTOR_LOGOS = {
   "MIT Media Lab": { name: "MIT Media Lab", src: "/contributors/logos/mit-media-lab.png", width: 284, height: 177 },
   "Wipro": { name: "Wipro", src: "/contributors/logos/wipro.svg", width: 393.35, height: 157.54 },
   "Wand AI": { name: "Wand AI", src: "/contributors/logos/wand-ai.svg", width: 3120, height: 868 },
+  "Suki": { name: "Suki", src: "/contributors/logos/suki.svg", width: 73, height: 35 },
+  "TinyFish": { name: "TinyFish", src: "/contributors/logos/tinyfish.svg", width: 731, height: 166 },
+  "AGI House": { name: "AGI House", src: "/contributors/logos/agi-house.svg", width: 628, height: 120 },
+  "L&T Technology Services": { name: "L&T Technology Services", src: "/contributors/logos/ltts.png", width: 732, height: 273 },
 } as const;

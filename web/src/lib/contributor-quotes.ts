@@ -10,7 +10,7 @@ type ContributorQuote = {
   };
 };
 
-// Publish only quotes approved in the source document or explicitly supplied for publication.
+// Publish only quotes approved in the source document or correspondence, or explicitly supplied for publication.
 // https://docs.google.com/document/d/10bnpSssurB9mtlQ61Qe6rcBH44dUdFWhjXS6F8HrHSs
 export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   {
@@ -152,6 +152,30 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       title: "Wand AI: An Open Agentic Web Needs Open Discovery",
       href: "https://lnkd.in/p/gsX4NqKp",
     },
+  },
+  {
+    text:
+      "Healthcare has spent decades paying for systems that can’t talk to each other, and AI agents can’t repeat that mistake. As clinicians start working alongside agents for documentation, coding, and care coordination, those agents need to find and trust one another across health systems, EHRs, and vendors. At Suki, we’ve always focused on building infrastructure rather than point solutions, and Nanda Index brings that same open, interoperable approach to how agents are discovered.",
+    attribution: "Punit Soni, CEO and Co-Founder of Suki",
+    logo: CONTRIBUTOR_LOGOS["Suki"],
+  },
+  {
+    text:
+      "At TinyFish we run enterprise-grade agents on the open web every day, and the hardest part is rarely the task itself. It’s knowing where to go and whether to trust what’s there. Most businesses will never publish an API or build their own agent. An open index that makes them findable anyway is the right foundation for an agentic web that includes everyone, not just the companies that can afford to rebuild for it.",
+    attribution: "Sudheesh Nair, Co-founder & CEO, TinyFish",
+    logo: CONTRIBUTOR_LOGOS["TinyFish"],
+  },
+  {
+    text:
+      "At AGI House, we've seen firsthand through our Internet of Agents and Agent Identity Build Days that the next wave of AI innovation requires more than increasingly powerful models. Agents need ways to discover one another, establish trust, and work together across independent platforms. NandaIndex is a promising initiative to help build that open foundation, giving the next generation of AI founders and developers the infrastructure to create products that no single platform could enable alone.",
+    attribution: "Rocky Yu, Founder, AGI House & General Partner, AGI House Ventures",
+    logo: CONTRIBUTOR_LOGOS["AGI House"],
+  },
+  {
+    text:
+      "Industrial AI agents cannot operate in silos. At L&T Technology Services (LTTS), our Engineering Intelligence and AgenticIQ initiatives are bringing autonomous agents into complex engineering and manufacturing workflows. NandaIndex can help extend this collaboration across enterprise boundaries through open, federated discovery, without compromising control over proprietary engineering systems and data.",
+    attribution: "Piyush Jain, Deputy CTO, L&T Technology Services (LTTS)",
+    logo: CONTRIBUTOR_LOGOS["L&T Technology Services"],
   },
 ];
 

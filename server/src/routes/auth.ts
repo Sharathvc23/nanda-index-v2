@@ -4,6 +4,7 @@ import {
   findUserByEmail,
   createUserWithPassword,
   updateUserPassword,
+  wasJustCreated,
   type User,
 } from '../db/queries/users.js';
 import {
@@ -153,6 +154,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         // Google reports whether it has verified the address; trust only that.
         emailVerified: profile.verified_email !== false,
       });
+      if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'google' });
 
       const token = await signSession(reply, user, config.jwt.expiresIn);
 
@@ -202,6 +204,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
 
       const passwordHash = await passwords.hash(password);
       const user = await createUserWithPassword(email, passwordHash, display_name ?? null);
+      fastify.analytics.capture('user_signed_up', { method: 'email' });
 
       // The session is returned even though the email is unverified, so the
       // dashboard can show the "verify your email" prompt. Org writes stay
@@ -409,6 +412,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         providerId:  String(profile.id),
         emailVerified,
       });
+      if (wasJustCreated(user)) fastify.analytics.capture('user_signed_up', { method: 'github' });
 
       const token = await signSession(reply, user, config.jwt.expiresIn);
 

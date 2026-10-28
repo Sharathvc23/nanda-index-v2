@@ -32,3 +32,7 @@ process.env['SEARCH_RATE_LIMIT_MAX'] ??= '100000';
 // value in .env cannot turn the cache on; index-stats-cache.test.ts turns it
 // on itself to test it.
 process.env['INDEX_STATS_CACHE_SECONDS'] = '0';
+
+// Never send test traffic to a real PostHog project, even if .env has a key.
+// Tests that check events spy on fastify.analytics instead.
+process.env['POSTHOG_API_KEY'] = '';

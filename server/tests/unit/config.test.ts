@@ -203,6 +203,28 @@ describe('buildConfig', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('leaves server-side analytics off unless POSTHOG_API_KEY is set', () => {
+    process.env.DATABASE_URL = 'x';
+    delete process.env.POSTHOG_API_KEY;
+    delete process.env.POSTHOG_HOST;
+
+    expect(buildConfig().analytics).toEqual({
+      posthogApiKey: undefined,
+      posthogHost: 'https://us.i.posthog.com',
+    });
+  });
+
+  it('reads the PostHog key and host from env', () => {
+    process.env.DATABASE_URL = 'x';
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    process.env.POSTHOG_HOST = 'https://eu.i.posthog.com';
+
+    expect(buildConfig().analytics).toEqual({
+      posthogApiKey: 'phc_test',
+      posthogHost: 'https://eu.i.posthog.com',
+    });
+  });
+
   it('exits on a non-integer TRUST_PROXY_HOPS', () => {
     process.env.DATABASE_URL = 'x';
     process.env.TRUST_PROXY_HOPS = 'yes';

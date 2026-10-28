@@ -133,6 +133,13 @@ export interface LlmEnrichmentConfig {
   readonly timeoutMs: number;
 }
 
+export interface AnalyticsConfig {
+  /** PostHog project API key; undefined = server-side analytics disabled. */
+  readonly posthogApiKey: string | undefined;
+  /** PostHog ingestion host (US Cloud by default). */
+  readonly posthogHost: string;
+}
+
 export interface Config {
   readonly port: number;
   readonly nodeEnv: string;
@@ -165,6 +172,7 @@ export interface Config {
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
+  readonly analytics: AnalyticsConfig;
 }
 
 /**
@@ -294,6 +302,10 @@ export function buildConfig(): Config {
       timeoutMs: parsePositiveInt(
         'OPENAI_ENRICHMENT_TIMEOUT_MS', optionalEnv('OPENAI_ENRICHMENT_TIMEOUT_MS', '8000'),
       ),
+    },
+    analytics: {
+      posthogApiKey: process.env['POSTHOG_API_KEY'] || undefined,
+      posthogHost: optionalEnv('POSTHOG_HOST', 'https://us.i.posthog.com'),
     },
   };
 }

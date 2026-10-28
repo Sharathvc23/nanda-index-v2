@@ -128,6 +128,10 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "By our research, 99 percent of the web isn't ready for AI agents, and most agents fail before they ever reach the business they're looking for. Discovery is where the agentic web breaks first. We need to reinvent it for agents, not retrofit search-era methods. NandaIndex takes a bold step in that direction, making businesses and individuals discoverable by any agent, without requiring their own infrastructure. It complements open standards like ARD and MCP Apps that we're helping build, and we're excited to work with the NANDA team to bring this vision to life.",
     attribution: "Liad Yosef, Co-founder & CTO, Ora",
     logo: CONTRIBUTOR_LOGOS["Ora"],
+    post: {
+      title: "Ora Partners with MIT's NandaIndex to Build the Open Agentic Web",
+      href: "https://ora.ai/blog/ora-partners-with-mit-nandaindex-to-build-the-open-agentic-web",
+    },
   },
   {
     text:

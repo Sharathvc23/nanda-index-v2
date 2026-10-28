@@ -33,6 +33,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "The emerging Internet of AI Agents raises important questions about discovery, identity, interoperability, and accountability. I would like to see the community develop a shared understanding of the desirable properties of this infrastructure. The NandaIndex initiative offers a useful forum for exploring these questions and developing open, interoperable approaches.",
+    attribution: "Vint Cerf, Internet Pioneer and Co-Designer of TCP/IP",
+    logo: null,
+  },
+  {
+    text:
       "In just the last few months, we have seen AI agents acting on behalf of consumers and businesses dramatically rise. For an open agentic economy to scale, agents must be able to discover relevant services across fragmented ecosystems. An open discovery effort like NandaIndex is an important step in that direction, and we welcome the industry conversation on how verified identity, trust, and secure commerce can be built on top of them.",
     attribution: "Arjun Chittoor, VP, PayPal",
     logo: CONTRIBUTOR_LOGOS["PayPal"],
@@ -188,12 +194,6 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "At Nebius, we believe the next generation of AI infrastructure must make it easy to move from powerful models to reliable, production-ready AI agents. Our work on Nebius AI Cloud, Token Factory, and AI-powered infrastructure management is helping developers make that transition. But a truly open agentic ecosystem also needs ways for agents running on different clouds and platforms to discover one another. NandaIndex is an important initiative toward making that interoperability possible.",
     attribution: "Narek Tatevosyan, VP of Product, Nebius",
     logo: CONTRIBUTOR_LOGOS["Nebius"],
-  },
-  {
-    text:
-      "The emerging Internet of AI Agents raises important questions about discovery, identity, interoperability, and accountability. I would like to see the community develop a shared understanding of the desirable properties of this infrastructure. The NandaIndex initiative offers a useful forum for exploring these questions and developing open, interoperable approaches.",
-    attribution: "Vint Cerf, Internet Pioneer and Co-Designer of TCP/IP",
-    logo: null,
   },
 ];
 

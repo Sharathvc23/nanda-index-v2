@@ -121,6 +121,25 @@ describe('Public limits, reserved ids and unverified trust data', () => {
       expect(ids).toEqual(['lim-a', 'lim-b']);
     });
 
+    it('serves a page from the middle of the index in creation order', async () => {
+      await seedOrg('lim-a');
+      await seedOrg('lim-b');
+      await seedOrg('lim-c');
+      // Other suites add and remove entries in parallel, so an offset read from
+      // one listing can be stale by the next request. Dating these three before
+      // anything another suite creates pins them to the head of the index.
+      await getSql()`
+        UPDATE organizations
+        SET created_at = TIMESTAMPTZ '2000-01-01' + (CASE org_id WHEN 'lim-a' THEN 1 WHEN 'lim-b' THEN 2 ELSE 3 END) * INTERVAL '1 second'
+        WHERE org_id IN ('lim-a', 'lim-b', 'lim-c')
+      `;
+
+      const page = await fastify.inject({ method: 'GET', url: '/api/v1/index?limit=2&offset=1' });
+      const ids = (page.json() as Array<{ extensions: Record<string, { orgId: string }> }>)
+        .map((e) => e.extensions['org.projectnanda']!.orgId);
+      expect(ids).toEqual(['lim-b', 'lim-c']);
+    });
+
     it.each(['limit=0', 'limit=501', 'offset=-1', 'limit=abc'])('rejects %s', async (qs) => {
       const res = await fastify.inject({ method: 'GET', url: `/api/v1/index?${qs}` });
       expect(res.statusCode).toBe(400);

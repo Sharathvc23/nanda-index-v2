@@ -158,6 +158,10 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "We're moving toward a world with billions of autonomous AI agents, each needing its own identity, infrastructure, and place in the digital world. Maritime makes it possible to run these agents at scale, while NandaIndex makes them discoverable and reachable. Together, we're building the foundation for an open agentic web.",
     attribution: "Maria Gorskikh, Founder & CEO, Maritime (YC F26)",
     logo: CONTRIBUTOR_LOGOS["Maritime"],
+    post: {
+      title: "Every agent needs a home and an address",
+      href: "https://maritime.sh/blog/nandaindex-every-agent-needs-a-home-and-an-address",
+    },
   },
   {
     text:

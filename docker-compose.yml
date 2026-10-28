@@ -48,6 +48,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@nanda.local}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+      ORG_RECOVERY_RATE_LIMIT_MAX: ${ORG_RECOVERY_RATE_LIMIT_MAX:-30}
     ports:
       - "3001:3001"
     depends_on:

@@ -1,36 +1,12 @@
-/**
- * Re-proving a domain to recover an org that has no administrator.
- *
- * `org_memberships.user_id` is `REFERENCES users(id) ON DELETE CASCADE` and
- * `insertMembership` runs in exactly one place — org creation. So removing a
- * user row takes its memberships with it while the `organizations` row
- * survives, leaving an org nobody can administer. Everything that could fix it
- * is gated on `requireOrgRole('admin')`: the record cannot be updated,
- * suspended, deleted to free the slug, or re-verified. Re-registering is
- * refused as well — `findSlugConflict` releases only an `isAbandonedClaim`
- * (false for anything `everProven`) and `findConflict` keeps the proven domain
- * reserved. The entry stays `active` and keeps being served throughout.
- *
- * The org never lost the ability to prove ownership, only the permission to
- * attempt it. These tests pin the properties that make re-proving safe:
- *
- *   - it restores a real write (403 → 200 on PUT /api/v1/orgs/:org_id)
- *   - it refuses an org that still HAS an admin: recovery, not takeover
- *   - it is not an oracle for whether an org has an admin — the challenge is
- *     issued identically either way, and the no-admin verdict is only reachable
- *     AFTER the DNS proof succeeds
- *   - DNS control is genuinely required
- */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { buildEntryProfile, NANDA_EXTENSION } from '../../src/lib/entryProfile.js';
+import { NANDA_MEDIA_TYPES, SINGLE_RESOURCE_MEDIA_TYPES } from '../../src/lib/mediaTypes.js';
 
-// vi.hoisted lets the (hoisted) vi.mock factory reference the spy safely.
-const { resolveTxtMock } = vi.hoisted(() => ({ resolveTxtMock: vi.fn() }));
-// Every resolver verification asks — the host's own and each public one
-// (defaultTxtResolver fans out to 1.1.1.1 / 8.8.8.8 / 9.9.9.9 via Resolver) —
-// answers from the same spy, so a test states one DNS truth and all of them
-// see it. Omitting `Resolver` makes the verifier throw rather than resolve.
+const { resolveTxtMock, sendRecoveryMock } = vi.hoisted(() => ({
+  resolveTxtMock: vi.fn(), sendRecoveryMock: vi.fn(),
+}));
 vi.mock('node:dns/promises', () => ({
   resolveTxt: resolveTxtMock,
   Resolver: class {
@@ -38,284 +14,377 @@ vi.mock('node:dns/promises', () => ({
     resolveTxt(name: string) { return resolveTxtMock(name); }
   },
 }));
+vi.mock('../../src/services/email.js', async (original) => ({
+  ...await original<typeof import('../../src/services/email.js')>(), sendOrgRecoveryEmail: sendRecoveryMock,
+}));
 
 const { buildServer } = await import('../../src/server.js');
-const { getSql } = await import('../../src/db/client.js');
+const { getSql, closeSql } = await import('../../src/db/client.js');
 const { upsertUser } = await import('../../src/db/queries/users.js');
+const { findByOrgId } = await import('../../src/db/queries/organizations.js');
+const dns = await import('../../src/services/domainVerification.js');
 
-const CLAIMANT_EMAIL = 'claim-claimant@example.com';
-const SITTING_ADMIN_EMAIL = 'claim-sitting-admin@example.com';
-
-async function seedProvenOrg(orgId: string, opts: { domain?: string | null } = {}): Promise<void> {
-  const sql = getSql();
-  const domain = opts.domain === null ? null : (opts.domain ?? `${orgId}.example.com`);
-  await sql`
-    INSERT INTO organizations
-      (org_id, display_name, domain, contact_email, registry_url, verify_token,
-       email_verified, domain_verified, ever_proven, status, identifier, media_type, description, tags)
-    VALUES
-      (${orgId}, ${`Claimable ${orgId}`}, ${domain}, ${`admin@${domain ?? 'example.com'}`},
-       ${`https://${domain ?? 'example.com'}/registry`}, ${randomBytes(16).toString('hex')},
-       true, ${domain !== null}, true, 'active',
-       ${domain ? `urn:air:${domain}:catalog:root` : `urn:air:host39.org:personal:${orgId}@example.com`},
-       'application/ai-catalog+json', 'claimable org fixture', ${sql.array(['claimfixture'])})
-  `;
-}
-
-describe('Claiming an org by re-proving its domain', () => {
-  let fastify: FastifyInstance;
-  let claimantToken: string;
-  let claimantId: string;
-  let sittingAdminId: string;
+describe('Recovery of an orphaned domain or personal entry', () => {
+  let app: FastifyInstance;
+  let ownerId: string;
+  let otherId: string;
+  let ownerToken: string;
+  let otherToken: string;
+  const records = new Map<string, string[]>();
 
   beforeAll(async () => {
-    const built = await buildServer({ logger: false });
-    fastify = built.fastify;
-    await fastify.ready();
-
-    const claimant = await upsertUser({
-      email: CLAIMANT_EMAIL, displayName: 'Claimant', avatarUrl: null,
-      provider: 'github', providerId: 'claim-claimant-pid',
-    });
-    claimantId = claimant.id;
-    claimantToken = fastify.jwt.sign({ userId: claimant.id, email: claimant.email, displayName: null });
-
-    const sitting = await upsertUser({
-      email: SITTING_ADMIN_EMAIL, displayName: 'Sitting', avatarUrl: null,
-      provider: 'github', providerId: 'claim-sitting-pid',
-    });
-    sittingAdminId = sitting.id;
+    app = (await buildServer({ logger: false })).fastify;
+    await app.ready();
   });
-
-  afterAll(async () => {
-    await fastify.close();
-    const { closeSql } = await import('../../src/db/client.js');
-    await closeSql();
-  });
-
+  afterAll(async () => { await app.close(); await closeSql(); });
   beforeEach(async () => {
+    vi.restoreAllMocks();
+    sendRecoveryMock.mockReset().mockResolvedValue(undefined);
     resolveTxtMock.mockReset();
+    records.clear();
+    resolveTxtMock.mockImplementation(async (name: string) => (records.get(name) ?? []).map(v => [v]));
     const sql = getSql();
-    await sql`DELETE FROM organizations WHERE org_id LIKE 'claim-%'`;
+    await sql`DELETE FROM organizations WHERE org_id LIKE 'recovery-%'`;
+    const owner = await upsertUser({ email: 'recovery-owner@example.com', displayName: null,
+      avatarUrl: null, provider: 'github', providerId: 'recovery-owner' });
+    const other = await upsertUser({ email: 'recovery-other@example.com', displayName: null,
+      avatarUrl: null, provider: 'github', providerId: 'recovery-other' });
+    ownerId = owner.id; otherId = other.id;
+    ownerToken = app.jwt.sign({ userId: owner.id, email: owner.email, displayName: null, tokenVersion: owner.tokenVersion });
+    otherToken = app.jwt.sign({ userId: other.id, email: other.email, displayName: null, tokenVersion: other.tokenVersion });
   });
 
-  /** Walks phase 1 and publishes the returned record into the DNS mock. */
-  async function issueAndPublish(orgId: string): Promise<void> {
-    const phase1 = await fastify.inject({
-      method: 'POST', url: `/api/v1/orgs/${orgId}/claim`,
-      headers: { authorization: `Bearer ${claimantToken}` },
+  async function seed(id: string, opts: { personal?: boolean; mediaType?: string; proven?: boolean;
+    status?: string; moderation?: string; email?: string } = {}) {
+    const sql = getSql();
+    const domain = opts.personal ? null : `${id}.example.com`;
+    const email = opts.email ?? `${id}@example.com`;
+    const profile = buildEntryProfile({ path: opts.personal ? 'personal' : 'registry',
+      domain, contactEmail: email, orgId: id, displayName: id, mediaType: opts.mediaType });
+    await sql`INSERT INTO organizations
+      (org_id, display_name, domain, contact_email, registry_url, email_verified,
+       domain_verified, ever_proven, status, moderation, identifier, media_type, publisher, extensions)
+      VALUES (${id}, ${id}, ${domain}, ${email}, 'https://example.com/catalog',
+        ${opts.proven ?? true}, ${domain !== null && (opts.proven ?? true)}, ${opts.proven ?? true},
+        ${opts.status ?? 'active'}, ${opts.moderation ?? 'none'}, ${profile.identifier}, ${profile.mediaType},
+        ${sql.json(JSON.parse(JSON.stringify(profile.publisher)))},
+        ${sql.json(JSON.parse(JSON.stringify(profile.extensions)))})`;
+    return (await findByOrgId(id))!;
+  }
+  function claim(id: string, jwt = ownerToken, code?: string, instance = app, ip = '127.0.0.1') {
+    return instance.inject({ method: 'POST', url: `/api/v1/orgs/${id}/claim`,
+      headers: { authorization: `Bearer ${jwt}` }, remoteAddress: ip,
+      ...(code ? { payload: { token: code } } : {}),
     });
-    expect(phase1.statusCode).toBe(202);
-    expect(phase1.json().status).toBe('challenge_issued');
-    resolveTxtMock.mockResolvedValue([[phase1.json().record_value]]);
+  }
+  async function issue(id: string, jwt = ownerToken) {
+    const response = await claim(id, jwt);
+    expect(response.statusCode, response.body).toBe(202);
+    return response.json();
+  }
+  async function publish(id: string, jwt = ownerToken) {
+    const body = await issue(id, jwt);
+    records.set(body.record_name, [...(records.get(body.record_name) ?? []), body.record_value]);
+    return body;
+  }
+  async function admins(id: string) {
+    return getSql()`SELECT user_id FROM org_memberships WHERE org_id = ${id} AND role = 'admin'`;
+  }
+  async function challenges(id: string) {
+    return getSql()`SELECT c.* FROM org_recovery_challenges c JOIN organizations o
+      ON o.id = c.organization_id WHERE o.org_id = ${id}`;
+  }
+  async function emailCode(id: string, jwt = ownerToken) {
+    const body = await issue(id, jwt);
+    expect(body.method).toBe('email');
+    const code = sendRecoveryMock.mock.calls.at(-1)![1] as string;
+    expect(body).not.toHaveProperty('token');
+    expect(JSON.stringify(body)).not.toContain(code);
+    return code;
   }
 
-  // ── the recovery ──────────────────────────────────────────────────────────
+  it.each(NANDA_MEDIA_TYPES)('recovers domain-backed %s and preserves its discovery profile', async (mediaType) => {
+    const id = 'recovery-domain';
+    const before = await seed(id, { mediaType });
+    const update = () => app.inject({ method: 'PUT', url: `/api/v1/orgs/${id}`,
+      headers: { authorization: `Bearer ${ownerToken}` }, payload: { tags: ['recovered'] } });
+    expect((await update()).statusCode).toBe(403);
+    await publish(id);
+    expect((await claim(id)).statusCode).toBe(201);
+    expect(await findByOrgId(id)).toEqual(before);
+    expect((await update()).statusCode).toBe(200);
+    expect(await admins(id)).toEqual([{ userId: ownerId }]);
+  });
 
-  it('restores the ability to write to an org that had no admin', async () => {
-    await seedProvenOrg('claim-recoverable');
-
-    // Before: published, and unwritable by anyone.
-    const before = await fastify.inject({
-      method: 'PUT', url: '/api/v1/orgs/claim-recoverable',
-      headers: { authorization: `Bearer ${claimantToken}` },
-      payload: { tags: ['recovered'] },
-    });
-    expect(before.statusCode).toBe(403);
-    expect(before.json().detail).toContain('not a member');
-
-    await issueAndPublish('claim-recoverable');
-
-    const claim = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-recoverable/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(claim.statusCode).toBe(201);
-    expect(claim.json().org_id).toBe('claim-recoverable');
-
-    // After: the same request by the same account now succeeds.
-    const after = await fastify.inject({
-      method: 'PUT', url: '/api/v1/orgs/claim-recoverable',
-      headers: { authorization: `Bearer ${claimantToken}` },
-      payload: { tags: ['recovered'] },
-    });
-    expect(after.statusCode).toBe(200);
-    expect(after.json().tags).toEqual(['recovered']);
-
-    const sql = getSql();
-    const rows = await sql<{ role: string }[]>`
-      SELECT role FROM org_memberships WHERE org_id = 'claim-recoverable' AND user_id = ${claimantId}
-    `;
-    expect(rows[0]!.role).toBe('admin');
+  it.each(SINGLE_RESOURCE_MEDIA_TYPES)('recovers personal %s through its registered email', async (mediaType) => {
+    const id = 'recovery-personal';
+    // Account email may differ from the entry's owner address. Both the fresh
+    // mailbox proof and the initiating account session are required.
+    const before = await seed(id, { personal: true, mediaType, email: 'JohnDoe@gmail.com' });
+    const code = await emailCode(id);
+    expect(sendRecoveryMock).toHaveBeenCalledWith('johndoe@gmail.com', code, id, 'recovery-owner@example.com');
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+    expect(await findByOrgId(id)).toEqual(before);
+    expect(await admins(id)).toEqual([{ userId: ownerId }]);
+    expect(resolveTxtMock).not.toHaveBeenCalled();
+    const update = await app.inject({ method: 'PUT', url: `/api/v1/orgs/${id}`,
+      headers: { authorization: `Bearer ${ownerToken}` }, payload: { tags: ['recovered'] } });
+    expect(update.statusCode).toBe(200);
   });
 
   it('the orphaned state is reachable by deleting the owning account', async () => {
-    await seedProvenOrg('claim-by-cascade');
+    const id = 'recovery-cascade'; await seed(id);
     const sql = getSql();
-    const doomed = await upsertUser({
-      email: 'claim-doomed@example.com', displayName: null, avatarUrl: null,
-      provider: 'github', providerId: 'claim-doomed-pid',
-    });
-    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${doomed.id}, 'claim-by-cascade', 'admin')`;
-
-    await sql`DELETE FROM users WHERE id = ${doomed.id}`;
-
-    const left = await sql<{ count: string }[]>`
-      SELECT COUNT(*)::text AS count FROM org_memberships WHERE org_id = 'claim-by-cascade'
-    `;
-    expect(left[0]!.count).toBe('0');
-    // The org survives the cascade and stays published — the asymmetry that
-    // makes this silent.
-    const org = await sql<{ status: string }[]>`
-      SELECT status FROM organizations WHERE org_id = 'claim-by-cascade'
-    `;
-    expect(org[0]!.status).toBe('active');
+    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${otherId}, ${id}, 'admin')`;
+    await sql`DELETE FROM users WHERE id = ${otherId}`;
+    expect(await admins(id)).toHaveLength(0);
+    expect((await findByOrgId(id))!.status).toBe('active');
   });
 
-  // ── recovery, not takeover ────────────────────────────────────────────────
-
-  it('refuses an org that still has an admin, even with the domain proven', async () => {
-    await seedProvenOrg('claim-administered');
+  it('keeps admin membership private until a caller proves ownership', async () => {
     const sql = getSql();
-    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${sittingAdminId}, 'claim-administered', 'admin')`;
-
-    await issueAndPublish('claim-administered');
-
-    const claim = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-administered/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(claim.statusCode).toBe(403);
-    expect(claim.json().detail).toContain('already has an administrator');
-
-    // No membership was created for the claimant.
-    const rows = await sql<{ count: string }[]>`
-      SELECT COUNT(*)::text AS count FROM org_memberships WHERE org_id = 'claim-administered' AND user_id = ${claimantId}
-    `;
-    expect(rows[0]!.count).toBe('0');
+    await seed('recovery-admin'); await seed('recovery-orphan');
+    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${otherId}, 'recovery-admin', 'admin')`;
+    const administered = await publish('recovery-admin');
+    const orphan = await issue('recovery-orphan');
+    expect(Object.keys(administered).sort()).toEqual(Object.keys(orphan).sort());
+    const result = await claim('recovery-admin');
+    expect(result.statusCode).toBe(409);
+    expect(result.json().error).toBe('ALREADY_ADMINISTERED');
+    expect(await admins('recovery-admin')).toEqual([{ userId: otherId }]);
   });
 
-  it('a member-but-not-admin org is still administered and not claimable', async () => {
-    await seedProvenOrg('claim-member-only');
+  it('does not let another account use the owner’s published DNS proof', async () => {
+    const id = 'recovery-wrong-caller'; await seed(id);
+    const owner = await publish(id);
+    const other = await issue(id, otherToken);
+    expect(other.record_value).not.toBe(owner.record_value);
+    expect((await claim(id, otherToken)).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+    expect((await claim(id)).statusCode).toBe(201);
+  });
+
+  it('does not disturb registration’s existing domain challenge', async () => {
+    const id = 'recovery-separate'; await seed(id);
     const sql = getSql();
-    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${sittingAdminId}, 'claim-member-only', 'member')`;
-
-    await issueAndPublish('claim-member-only');
-    const claim = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-member-only/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    // No ADMIN exists, so this org genuinely cannot be administered: claimable.
-    expect(claim.statusCode).toBe(201);
+    await sql`UPDATE organizations SET domain_challenge = 'registration-token',
+      domain_challenge_expires_at = NOW() + INTERVAL '1 day' WHERE org_id = ${id}`;
+    const body = await publish(id);
+    expect(body.record_name).toBe(`_nanda-recovery.${id}.example.com`);
+    expect(body.record_value).toMatch(/^nanda-recover=[a-f0-9]{64}$/);
+    expect((await claim(id)).statusCode).toBe(201);
+    expect((await findByOrgId(id))!.domainChallenge).toBe('registration-token');
   });
 
-  // ── not an oracle ─────────────────────────────────────────────────────────
+  it.each([{ values: [] }, { values: ['nanda-recover=wrong'] }])('requires the correct TXT value: $values', async ({ values }) => {
+    const id = 'recovery-no-proof'; await seed(id);
+    const issued = await issue(id);
+    records.set(issued.record_name, values);
+    expect((await claim(id)).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+  });
 
-  it('the challenge is issued identically whether or not the org has an admin', async () => {
-    // If the no-admin check ran before the DNS proof, this endpoint would let
-    // anyone probe the membership state of any org in the index.
-    await seedProvenOrg('claim-oracle-none');
-    await seedProvenOrg('claim-oracle-admin');
+  it('promotes an existing member when no administrator exists', async () => {
+    const id = 'recovery-promote'; await seed(id);
+    await getSql()`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${ownerId}, ${id}, 'member')`;
+    await publish(id);
+    expect((await claim(id)).statusCode).toBe(201);
+    expect(await admins(id)).toEqual([{ userId: ownerId }]);
+  });
+
+  it('grants exactly one admin when two independently valid DNS proofs race', async () => {
+    const id = 'recovery-race'; await seed(id);
+    await publish(id); await publish(id, otherToken);
+    const original = dns.lookupTxtToken;
+    let arrive = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const timeout = setTimeout(release, 2000);
+    vi.spyOn(dns, 'lookupTxtToken').mockImplementation(async (...args) => {
+      const result = await original(...args);
+      if (++arrive === 2) release();
+      await barrier;
+      return result;
+    });
+    try {
+      const results = await Promise.all([claim(id), claim(id, otherToken)]);
+      expect(results.map(r => r.statusCode).sort()).toEqual([201, 409]);
+      expect(await admins(id)).toHaveLength(1);
+      expect(await challenges(id)).toHaveLength(0);
+    } finally { clearTimeout(timeout); }
+  });
+
+  it('consumes all competing proofs and refuses replay after the recovered account is deleted', async () => {
+    const id = 'recovery-replay'; await seed(id);
+    await publish(id); const old = await publish(id, otherToken);
+    expect((await claim(id)).statusCode).toBe(201);
+    expect(await challenges(id)).toHaveLength(0);
+    await getSql()`DELETE FROM users WHERE id = ${ownerId}`;
+    const fresh = await issue(id, otherToken);
+    expect(fresh.record_value).not.toBe(old.record_value);
+    expect((await claim(id, otherToken)).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+  });
+
+  it('rotates an expired DNS proof and refuses the still-published old record', async () => {
+    const id = 'recovery-expired'; await seed(id); const old = await publish(id);
+    await getSql()`UPDATE org_recovery_challenges SET expires_at = NOW() - INTERVAL '1 second'`;
+    const fresh = await issue(id);
+    expect(fresh.record_value).not.toBe(old.record_value);
+    expect((await claim(id)).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+  });
+
+  it.each(['expiry', 'domain', 'domain-away-and-back', 'takedown', 'session-revocation', 'admin-added'])
+    ('rechecks %s after DNS verification and before granting access', async (change) => {
+      const id = 'recovery-during-dns'; const org = await seed(id); await publish(id);
+      const original = dns.lookupTxtToken;
+      vi.spyOn(dns, 'lookupTxtToken').mockImplementation(async (...args) => {
+        const result = await original(...args);
+        const sql = getSql();
+        if (change === 'expiry') await sql`UPDATE org_recovery_challenges SET expires_at = clock_timestamp() - INTERVAL '1 second'`;
+        if (change === 'domain' || change === 'domain-away-and-back') {
+          await sql`UPDATE organizations SET domain = 'new-owner.example.com',
+            identifier = 'urn:air:new-owner.example.com:catalog:root' WHERE org_id = ${id}`;
+          if (change === 'domain-away-and-back') await sql`UPDATE organizations SET
+            domain = ${org.domain}, identifier = ${org.identifier} WHERE org_id = ${id}`;
+        }
+        if (change === 'takedown') await sql`UPDATE organizations SET moderation = 'takedown' WHERE org_id = ${id}`;
+        if (change === 'session-revocation') await sql`UPDATE users SET token_version = token_version + 1 WHERE id = ${ownerId}`;
+        if (change === 'admin-added') await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${otherId}, ${id}, 'admin')`;
+        return result;
+      });
+      const result = await claim(id);
+      expect(result.statusCode).toBe(change === 'session-revocation' ? 401 : 409);
+      expect((await admins(id)).some(r => r.userId === ownerId)).toBe(false);
+    });
+
+  it('does not reuse a proof when the organization slug is deleted and registered again', async () => {
+    const id = 'recovery-recreated'; await seed(id); const old = await publish(id);
+    await getSql()`DELETE FROM organizations WHERE org_id = ${id}`;
+    await seed(id);
+    const fresh = await issue(id);
+    expect(fresh.record_value).not.toBe(old.record_value);
+    expect((await claim(id)).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+  });
+
+  it('stores only an email code hash, does not resend on polling, and refuses another account', async () => {
+    const id = 'recovery-email-binding'; await seed(id, { personal: true });
+    const code = await emailCode(id);
+    expect(code).toMatch(/^[a-f0-9]{64}$/);
+    const [stored] = await challenges(id);
+    expect(stored!.tokenHash).toBe(createHash('sha256').update(code).digest('hex'));
+    expect(stored!.dnsToken).toBeNull();
+    expect(JSON.stringify(stored)).not.toContain(code);
+    expect((await claim(id)).statusCode).toBe(202);
+    expect(sendRecoveryMock).toHaveBeenCalledTimes(1);
+    expect((await claim(id, otherToken, code)).statusCode).toBe(400);
+    expect((await claim(id, ownerToken, '0'.repeat(64))).statusCode).toBe(400);
+    expect(await admins(id)).toHaveLength(0);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+    expect(await challenges(id)).toHaveLength(0);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(400);
+  });
+
+  it('does not let a second account use an email code issued to the first', async () => {
+    const id = 'recovery-email-two'; await seed(id, { personal: true });
+    const first = await emailCode(id);
+    await getSql()`UPDATE org_recovery_challenges SET created_at = NOW() - INTERVAL '2 minutes'`;
+    const second = await emailCode(id, otherToken);
+    expect(second).not.toBe(first);
+    expect((await claim(id, otherToken, first)).statusCode).toBe(400);
+    expect((await claim(id, ownerToken, second)).statusCode).toBe(400);
+    expect((await claim(id, ownerToken, first)).statusCode).toBe(201);
+    expect(await challenges(id)).toHaveLength(0);
+  });
+
+  it('rate limits email delivery across accounts without invalidating the first challenge', async () => {
+    const id = 'recovery-mail-cooldown'; await seed(id, { personal: true });
+    const code = await emailCode(id);
+    expect((await claim(id, otherToken)).statusCode).toBe(429);
+    expect(sendRecoveryMock).toHaveBeenCalledTimes(1);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+  });
+
+  it('allows a fresh email attempt after delivery fails', async () => {
+    const id = 'recovery-mail-failed'; await seed(id, { personal: true });
+    sendRecoveryMock.mockRejectedValueOnce(new Error('mail unavailable'));
+    expect((await claim(id)).statusCode).toBe(500);
+    expect(await challenges(id)).toHaveLength(0);
+    const code = await emailCode(id);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+  });
+
+  it('rejects an expired email code without sending another email', async () => {
+    const id = 'recovery-email-expiry'; await seed(id, { personal: true });
+    const code = await emailCode(id);
+    await getSql()`UPDATE org_recovery_challenges SET expires_at = NOW() - INTERVAL '1 second'`;
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(400);
+    expect(sendRecoveryMock).toHaveBeenCalledTimes(1);
+    expect(await admins(id)).toHaveLength(0);
+  });
+
+  it.each(['contact', 'subjectAccount', 'identifier'])('refuses inconsistent personal %s identity', async (field) => {
+    const id = 'recovery-email-inconsistent'; await seed(id, { personal: true });
     const sql = getSql();
-    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${sittingAdminId}, 'claim-oracle-admin', 'admin')`;
-
-    const withoutAdmin = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-oracle-none/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    const withAdmin = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-oracle-admin/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-
-    expect(withAdmin.statusCode).toBe(withoutAdmin.statusCode);
-    expect(withAdmin.statusCode).toBe(202);
-    expect(Object.keys(withAdmin.json()).sort()).toEqual(Object.keys(withoutAdmin.json()).sort());
-    expect(withAdmin.json().status).toBe(withoutAdmin.json().status);
+    if (field === 'contact') await sql`UPDATE organizations SET contact_email = 'other@example.com' WHERE org_id = ${id}`;
+    if (field === 'identifier') await sql`UPDATE organizations SET identifier = 'urn:air:host39.org:personal:other@example.com' WHERE org_id = ${id}`;
+    if (field === 'subjectAccount') await sql`UPDATE organizations SET extensions =
+      ${sql.json({ [NANDA_EXTENSION]: { subjectAccount: 'other@example.com' } })} WHERE org_id = ${id}`;
+    expect((await claim(id)).statusCode).toBe(409);
+    expect(sendRecoveryMock).not.toHaveBeenCalled();
+    expect(await admins(id)).toHaveLength(0);
   });
 
-  // ── DNS control is required ───────────────────────────────────────────────
-
-  it('without the TXT record published, no membership is granted', async () => {
-    await seedProvenOrg('claim-no-dns');
-    const phase1 = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-no-dns/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(phase1.statusCode).toBe(202);
-
-    resolveTxtMock.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }));
-    const claim = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-no-dns/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(claim.statusCode).toBe(400);
-    expect(claim.json().error).toBe('DOMAIN_NOT_VERIFIED');
-
-    const sql = getSql();
-    const rows = await sql<{ count: string }[]>`
-      SELECT COUNT(*)::text AS count FROM org_memberships WHERE org_id = 'claim-no-dns'
-    `;
-    expect(rows[0]!.count).toBe('0');
-  });
-
-  it('a wrong TXT value does not satisfy the challenge', async () => {
-    await seedProvenOrg('claim-wrong-txt');
-    const phase1 = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-wrong-txt/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(phase1.statusCode).toBe(202);
-
-    resolveTxtMock.mockResolvedValue([['nanda-verify=some-other-token'], ['v=spf1 ~all']]);
-    const claim = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-wrong-txt/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(claim.statusCode).toBe(400);
-    expect(claim.json().error).toBe('DOMAIN_NOT_VERIFIED');
-  });
-
-  it('the TXT record is looked up at the challenge name for the org domain', async () => {
-    await seedProvenOrg('claim-dns-name');
-    await issueAndPublish('claim-dns-name');
-    await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-dns-name/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(resolveTxtMock).toHaveBeenCalledWith('_nanda-challenge.claim-dns-name.example.com');
-  });
-
-  // ── shape ─────────────────────────────────────────────────────────────────
-
-  it('a domain-less personal org cannot be claimed by DNS', async () => {
-    await seedProvenOrg('claim-personal', { domain: null });
-    const res = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-personal/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe('NO_DOMAIN');
+  it.each([false, true])('refuses unproven, pending, and taken-down entries (personal=%s)', async (personal) => {
+    for (const [suffix, opts] of Object.entries({
+      unproven: { proven: false }, pending: { status: 'pending' }, takedown: { moderation: 'takedown' },
+    })) {
+      const id = `recovery-policy-${suffix}`;
+      await seed(id, { ...opts, personal });
+      expect((await claim(id)).statusCode).toBe(409);
+      expect(await challenges(id)).toHaveLength(0);
+      expect(await admins(id)).toHaveLength(0);
+    }
+    expect(sendRecoveryMock).not.toHaveBeenCalled();
     expect(resolveTxtMock).not.toHaveBeenCalled();
   });
 
-  it('an unknown org is reported as a missing org, not a missing route', async () => {
-    // A bare 404 assertion would pass against a build with no claim route at
-    // all, so the body is asserted too: the handler names the org it could not
-    // find, which a missing route cannot do.
-    const res = await fastify.inject({
-      method: 'POST', url: '/api/v1/orgs/claim-nope/claim',
-      headers: { authorization: `Bearer ${claimantToken}` },
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().error).toBe('NOT_FOUND');
-    expect(res.json().detail).toContain('org "claim-nope"');
+  it.each([false, true])('preserves suspension and hidden moderation (personal=%s)', async (personal) => {
+    const id = 'recovery-hidden';
+    const before = await seed(id, { personal, status: 'suspended', moderation: 'hidden' });
+    const code = personal ? await emailCode(id) : (await publish(id), undefined);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+    expect(await findByOrgId(id)).toEqual(before);
   });
 
-  it('an unauthenticated claim is rejected', async () => {
-    await seedProvenOrg('claim-anon');
-    const res = await fastify.inject({ method: 'POST', url: '/api/v1/orgs/claim-anon/claim' });
-    expect(res.statusCode).toBe(401);
-    expect(resolveTxtMock).not.toHaveBeenCalled();
+  it('counts an account’s requests across different source IPs', async () => {
+    vi.stubEnv('ORG_RECOVERY_RATE_LIMIT_MAX', '2');
+    const limited = (await buildServer({ logger: false })).fastify;
+    await limited.ready();
+    try {
+      expect((await claim('recovery-missing', ownerToken, undefined, limited, '192.0.2.1')).statusCode).toBe(404);
+      expect((await claim('recovery-missing', ownerToken, undefined, limited, '192.0.2.2')).statusCode).toBe(404);
+      const refused = await claim('recovery-missing', ownerToken, undefined, limited, '192.0.2.3');
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error).toBe('RECOVERY_RATE_LIMIT');
+      expect((await claim('recovery-missing', otherToken, undefined, limited, '192.0.2.3')).statusCode).toBe(404);
+    } finally { await limited.close(); vi.unstubAllEnvs(); }
+  });
+
+  it('rejects unauthenticated and unverified accounts', async () => {
+    await seed('recovery-auth');
+    const anonymous = await app.inject({ method: 'POST', url: '/api/v1/orgs/recovery-auth/claim' });
+    expect(anonymous.statusCode).toBe(401);
+    await getSql()`UPDATE users SET email_verified = false WHERE id = ${ownerId}`;
+    expect((await claim('recovery-auth')).statusCode).toBe(403);
+    expect(await challenges('recovery-auth')).toHaveLength(0);
+  });
+
+  it('reports an unknown organization explicitly', async () => {
+    const result = await claim('recovery-missing');
+    expect(result.statusCode).toBe(404);
+    expect(result.json()).toEqual({ error: 'NOT_FOUND', detail: 'org "recovery-missing" not found' });
   });
 });

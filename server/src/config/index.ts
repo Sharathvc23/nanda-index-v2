@@ -78,6 +78,8 @@ export interface AuthConfig {
 }
 
 export interface ClaimsConfig {
+  /** Recovery requests per authenticated account per hour, across orgs and IPs. */
+  readonly recoveryRateLimitMax: number;
   /** Max org create/update requests per window per client IP. */
   readonly writeRateLimitMax: number;
   readonly writeRateLimitWindow: string;
@@ -229,6 +231,9 @@ export function buildConfig(): Config {
       ),
     },
     claims: {
+      recoveryRateLimitMax: parsePositiveInt(
+        'ORG_RECOVERY_RATE_LIMIT_MAX', optionalEnv('ORG_RECOVERY_RATE_LIMIT_MAX', '30'),
+      ),
       writeRateLimitMax: parsePositiveInt(
         'ORG_WRITE_RATE_LIMIT_MAX', optionalEnv('ORG_WRITE_RATE_LIMIT_MAX', '30'),
       ),

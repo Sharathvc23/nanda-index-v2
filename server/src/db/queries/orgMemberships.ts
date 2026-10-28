@@ -26,24 +26,6 @@ export async function insertMembership(
   return rows[0]!;
 }
 
-/**
- * Whether anyone can still administer this org.
- *
- * `user_id` is `REFERENCES users(id) ON DELETE CASCADE`, so removing a user row
- * takes its memberships with it while the `organizations` row survives. An org
- * can therefore reach zero admins, and `requireOrgRole('admin')` then refuses
- * every write to it — including the delete that would free the slug.
- */
-export async function hasAdminMembership(orgId: string): Promise<boolean> {
-  const sql = getSql();
-  const rows = await sql<{ exists: boolean }[]>`
-    SELECT EXISTS (
-      SELECT 1 FROM org_memberships WHERE org_id = ${orgId} AND role = 'admin'
-    ) AS exists
-  `;
-  return rows[0]?.exists ?? true; // unreadable → assume administered, never claimable
-}
-
 export interface MembershipWithOrg extends OrgMembership {
   displayName: string;
   status: 'pending' | 'active' | 'suspended';

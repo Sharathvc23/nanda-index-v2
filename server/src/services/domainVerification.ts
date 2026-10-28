@@ -109,7 +109,15 @@ export async function lookupDomainToken(
   expectedValue: string,
   resolve: TxtResolver = defaultTxtResolver(),
 ): Promise<DomainLookupResult> {
-  const name = challengeRecordName(domain);
+  return lookupTxtToken(challengeRecordName(domain), expectedValue, resolve);
+}
+
+/** Shared TXT comparison; recovery uses its own record name and value prefix. */
+export async function lookupTxtToken(
+  name: string,
+  expectedValue: string,
+  resolve: TxtResolver = defaultTxtResolver(),
+): Promise<DomainLookupResult> {
 
   let records: string[][];
   try {

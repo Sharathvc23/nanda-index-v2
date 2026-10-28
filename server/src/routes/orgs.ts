@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { findByOrgId, findProvenByDomain, findProvenByIdentifier, countUnprovenOrgsForUser, insertOrganization, updateOrganization, suspendOrganization, reactivateOrganization, deleteOrganization, issueDomainChallenge, markDomainVerified, renewVerifyToken, toIndexRecord, type Organization } from '../db/queries/organizations.js';
-import { insertMembership, checkMembership, hasAdminMembership } from '../db/queries/orgMemberships.js';
+import { insertMembership, checkMembership } from '../db/queries/orgMemberships.js';
 import { sendVerificationEmail } from '../services/email.js';
 import { generateRepresentativeQueries } from '../services/llmEnrichment.js';
 import { buildConfig } from '../config/index.js';
@@ -318,8 +318,7 @@ function requireOrgRole(level: 'member' | 'admin') {
  *   GET    /api/v1/orgs/:org_id                  — read own org              (member)
  *   POST   /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin)
  *   POST   /api/v1/orgs/:org_id/verify-domain    — check DNS, activate org   (admin)
- *   POST   /api/v1/orgs/:org_id/claim            — re-prove the domain to take over an
- *                                                  org that has no admin    (any verified account)
+ *   Recovery is registered separately in org-recovery.ts (DNS or personal email).
  *   PUT    /api/v1/orgs/:org_id                  — update index record       (admin)
  *   DELETE /api/v1/orgs/:org_id/suspend          — suspend org               (admin)
  *   POST   /api/v1/orgs/:org_id/reactivate       — reactivate suspended      (admin)
@@ -578,150 +577,6 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     return reply.send(toIndexRecord(updated));
-  });
-
-  /**
-   * Re-prove a domain to take over an org that has NO administrator.
-   *
-   * `org_memberships.user_id` is `REFERENCES users(id) ON DELETE CASCADE` and
-   * `insertMembership` runs in exactly one place — org creation. So removing a
-   * user row takes its memberships with it while the `organizations` row
-   * survives, and an org can reach zero admins. Everything that could fix it
-   * is itself gated on `requireOrgRole('admin')`: the record cannot be
-   * updated, suspended, deleted to free the slug, or re-verified. Re-
-   * registering is refused too, since `findSlugConflict` releases only an
-   * `isAbandonedClaim` (false for anything `everProven`) and `findConflict`
-   * keeps the proven domain reserved. The entry stays `active` and keeps being
-   * served, so nothing surfaces the state until a write returns 403.
-   *
-   * The org never lost the ability to PROVE ownership — only the permission to
-   * attempt the proof. `/domain-challenge` and `/verify-domain` both sit behind
-   * `requireOrgRole('admin')`, which puts the strong, re-derivable proof (DNS
-   * control of the registered domain) behind the weak, mutable one (a row in a
-   * join table). This route inverts that back: the same DNS TXT challenge the
-   * index already treats as ownership at registration, with no prior
-   * membership required.
-   *
-   * Two-phase, like `/domain-challenge` → `/verify-domain`: the first call
-   * returns the record to publish (202), a later call verifies it and grants
-   * admin (201).
-   *
-   * ORDERING IS LOAD-BEARING. The challenge is issued BEFORE the no-admin
-   * check and the no-admin check runs only AFTER the DNS proof succeeds, so
-   * this endpoint is not an oracle for whether an arbitrary org has an
-   * administrator. A caller without DNS control learns nothing; a caller with
-   * it already controls the domain the org is anchored to.
-   *
-   * An org that still HAS an admin is refused rather than taken over: this is
-   * a recovery path, not a transfer. (A domain owner wanting an org that is
-   * still administered should be handled by a transfer flow, deliberately out
-   * of scope here.) A domain-less personal org proves ownership by email
-   * rather than DNS and so cannot use this route at all.
-   */
-  fastify.post<{ Params: { org_id: string } }>('/api/v1/orgs/:org_id/claim', {
-    preHandler: [fastify.authenticate, fastify.requireVerifiedAccount],
-    config: orgWriteRateLimit,
-    schema: {
-      tags: ['orgs'],
-      summary: 'Prove domain ownership to become admin of an org that has none',
-      description:
-        'For an org left with no administrator. The first call issues the DNS TXT challenge; '
-        + 'publish it, then call again to be granted admin. Refused if the org still has an admin.',
-      params: {
-        type: 'object',
-        required: ['org_id'],
-        properties: { org_id: { type: 'string' } },
-      },
-      response: {
-        201: INDEX_RECORD_SCHEMA,
-        202: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            record_name: { type: 'string' },
-            record_value: { type: 'string' },
-            expires_at: { type: 'string' },
-          },
-        },
-        400: apiErrorSchema,
-        403: apiErrorSchema,
-        404: apiErrorSchema,
-        409: apiErrorSchema,
-      },
-    },
-  }, async (request, reply) => {
-    const { userId } = request.user as JwtPayload;
-    const org = await findByOrgId(request.params.org_id);
-    if (!org) {
-      return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
-    }
-    if (!org.domain) {
-      return reply.code(400).send({
-        error: 'NO_DOMAIN',
-        detail: 'this org has no domain to prove (personal email-identity org)',
-      });
-    }
-
-    // Phase 1 — no usable challenge yet, so hand back the record to publish.
-    // Issued before any membership check so the response cannot be used to
-    // probe whether an org has an administrator. `issueDomainChallenge`
-    // returns the outstanding challenge while it is unexpired, so this cannot
-    // disturb a verification another caller already has in flight.
-    if (!org.domainChallenge || !org.domainChallengeExpiresAt || org.domainChallengeExpiresAt <= new Date()) {
-      const candidate = randomBytes(16).toString('hex');
-      const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
-      const issued = await issueDomainChallenge(org.orgId, candidate, expiresAt);
-      if (!issued?.domainChallenge || !issued.domainChallengeExpiresAt) {
-        return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
-      }
-      return reply.code(202).send({
-        status: 'challenge_issued',
-        record_name: challengeRecordName(org.domain),
-        record_value: challengeRecordValue(issued.domainChallenge),
-        expires_at: issued.domainChallengeExpiresAt.toISOString(),
-      });
-    }
-
-    // Phase 2 — the DNS proof comes first. Same check and message shape as
-    // /verify-domain.
-    const expectedValue = challengeRecordValue(org.domainChallenge);
-    const { verified, found } = await lookupDomainToken(org.domain, expectedValue);
-    if (!verified) {
-      const seen = found.length
-        ? ` Found instead: ${found.slice(0, 5).map((v) => `"${v}"`).join(', ')}.`
-        : '';
-      return reply.code(400).send({
-        error: 'DOMAIN_NOT_VERIFIED',
-        detail: `expected TXT "${expectedValue}" at ${challengeRecordName(org.domain)}, but it was not found. DNS changes can take time to propagate — try again shortly.${seen}`,
-      });
-    }
-
-    // Only now: proven domain control, so saying whether the org is already
-    // administered reveals nothing the caller could not establish anyway.
-    if (await hasAdminMembership(org.orgId)) {
-      return reply.code(403).send({
-        error: 'FORBIDDEN',
-        detail: `org "${org.orgId}" already has an administrator — ask them to add you rather than claiming it`,
-      });
-    }
-
-    try {
-      await insertMembership(userId, org.orgId, 'admin');
-    } catch (err) {
-      // Someone claimed it between the proof and the insert, or the caller
-      // already held a non-admin membership on it.
-      if (isUniqueViolation(err)) {
-        return reply.code(409).send({
-          error: 'CONFLICT',
-          detail: `a membership for this account on "${org.orgId}" already exists`,
-        });
-      }
-      throw err;
-    }
-
-    request.log.info({ orgId: org.orgId, userId, domain: org.domain }, 'org claimed by domain proof');
-    const current = await findByOrgId(org.orgId);
-    return reply.code(201).send(toIndexRecord(current ?? org));
   });
 
   // Update own org's index record

@@ -311,6 +311,51 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 | `DELETE` | `/api/v1/orgs/:org_id` | Permanently delete |
 | `DELETE` | `/api/v1/orgs/:org_id/suspend` | Suspend (removes from public index) |
 | `POST`   | `/api/v1/orgs/:org_id/reactivate` | Reactivate a suspended org |
+| `POST`   | `/api/v1/orgs/:org_id/claim` | Recover an entry with no administrator using account-bound DNS or personal-email proof |
+
+### Recovering an entry with no administrator
+
+Migration `018_org_recovery.sql` adds dedicated recovery challenges. Apply the
+server migrations before deploying the updated API. Any verified account may
+start recovery; completion requires fresh ownership proof tied to that same
+account. An account's verified login email alone does not prove ownership of an
+entry's domain or personal email identity.
+
+For a **domain-backed entry**, call `POST /api/v1/orgs/:org_id/claim` with the
+account's bearer token and no body (or `{}`). The `202` response supplies
+`method: "dns"`, `record_name`, `record_value`, and `expires_at`. Publish the
+supplied TXT record at `_nanda-recovery.<domain>`, then call the endpoint again
+using the same account. A successful claim returns `201` and grants admin access.
+DNS challenges last seven days. Each account gets an independent challenge;
+registration's `_nanda-challenge` record is unaffected.
+
+For a **personal entry**, the same initial request returns `202` with
+`method: "email"` and sends a 15-minute recovery code to the stored email bound
+to the personal identifier and `subjectAccount`. The API never returns the code.
+Complete recovery from the same account with `{"token":"<code from email>"}`.
+The login email may differ from the personal entry's address: the fresh mailbox
+proof and the initiating account session are both required. Repeating the initial
+request while its challenge is live does not resend email; after expiry, a new
+initial request issues a new code. Failed email delivery allows an immediate retry.
+
+| Entry | Recovery proof | Supported media types |
+|-------|----------------|-----------------------|
+| Domain-backed | DNS | AI Catalog, AI Registry, ANS Registry, A2A card, MCP card, agent skill |
+| Personal, no domain | Registered email | A2A card, MCP card, agent skill |
+
+Only currently proven entries in `active` or `suspended` state can be recovered.
+Pending, unverified, and taken-down entries are refused (`409`). Suspension and
+hidden moderation are preserved. An existing admin prevents recovery (`409`);
+an ordinary member can be promoted if no admin exists. Recovery changes membership
+only, preserving identifiers, media types, URLs, and all discovery behavior.
+
+The grant and consumption of all competing recovery proofs happen in one locked
+database transaction. Expired, consumed, or identity-invalidated proofs cannot
+grant access. Changing an identity away and back also invalidates its old proofs.
+Requests retain the per-IP org-write limit and add a per-account hourly limit
+(`ORG_RECOVERY_RATE_LIMIT_MAX`, default 30). Email issuance also has a one-minute
+per-entry cooldown across accounts. HTTP limits are per API process; the email
+cooldown and proof lifecycle are coordinated in PostgreSQL.
 
 ### Resolution Example
 

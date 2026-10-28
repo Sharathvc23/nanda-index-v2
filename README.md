@@ -131,6 +131,12 @@ NEXT_PUBLIC_NANDA_INDEX_API_URL=https://api.nandaindex.org
 # Google Analytics (GA4) — optional, omit to disable tracking
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 
+# PostHog — optional, omit to disable. One project key drives both the web app
+# (consent-gated analytics + masked session replay, proxied via /ingest) and the
+# API (anonymous sign-up / entry lifecycle counts). Host: US (default), EU or self-hosted.
+NEXT_PUBLIC_POSTHOG_KEY=phc_XXXXXXXXXX
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+
 DB_MAX_CONNECTIONS=10
 
 # Concierge demo at https://nandaindex.org/demo — all optional, defaults shown

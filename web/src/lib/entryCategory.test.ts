@@ -30,6 +30,14 @@ function entry(type: string, opts: { role?: string; tags?: string[] } = {}): Ind
 
 describe("categoryOf", () => {
   describe("personal entries", () => {
+    it("files a personal MCP server card (a MessageBox) under Personal, not MCPs", () => {
+      expect(categoryOf(entry(MCP, { role: "personal-agent-card" }))).toBe("personal");
+    });
+
+    it("files a personal skill under Personal, not Skills", () => {
+      expect(categoryOf(entry(SKILL, { role: "personal-agent-card" }))).toBe("personal");
+    });
+
     it("files a personal A2A agent card under Personal", () => {
       expect(categoryOf(entry(A2A, { role: "personal-agent-card" }))).toBe("personal");
     });

@@ -11,6 +11,10 @@ server/dist/
 web/.next/
 web/tsconfig.tsbuildinfo
 
+# Test coverage reports (vitest --coverage)
+server/coverage/
+web/coverage/
+
 # Logs
 *.log
 

@@ -4,16 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { listIndexRecords } from "@/lib/nanda-api";
 import { JsonPanel } from "@/components/JsonPanel";
 import type { IndexCatalogEntry, TrustManifest } from "@/lib/nanda-types";
-import { entryOps, nandaField } from "@/lib/air";
+import { entryOps } from "@/lib/air";
+import { categoryOf, type Category } from "@/lib/entryCategory";
 
 const PAGE_SIZE = 9;
 
 // ── Categories ──────────────────────────────────────────────────────────────
-// Exactly six categories. MCPs and Skills are driven purely by media_type;
-// Enterprise / DNS SVCB / SMBs / Personal come from the entry's
-// org.projectnanda resolutionRole, falling back to media_type plus tags.
-
-type Category = "enterprise" | "dns-svcb" | "smb" | "personal" | "mcp" | "skill";
+// Which category an entry belongs to is decided in lib/entryCategory.ts.
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "enterprise", label: "Enterprise" },
@@ -44,33 +41,6 @@ const CATEGORY_BADGE: Record<Category, string> = {
 };
 
 const FALLBACK_BADGE = "bg-surface-tag text-ink";
-
-const ROLE_CATEGORY: Record<string, Category> = {
-  "dns-svcb-pointer": "dns-svcb",
-  "smb-agent-card": "smb",
-  "personal-agent-card": "personal",
-};
-
-/** Map a single record to one of the six categories, or null when it fits none. */
-function categoryOf(record: IndexCatalogEntry): Category | null {
-  const mt = record.type ?? "";
-  const tags = (record.tags ?? []).map((t) => t.toLowerCase());
-
-  // Media-type-driven categories take priority.
-  if (mt === "application/mcp-server-card+json") return "mcp";
-  if (mt === "application/agentskill+zip") return "skill";
-  if (mt === "application/ai-catalog+json" || mt === "application/ai-registry+json") return "enterprise";
-
-  const role = nandaField(record, "resolutionRole");
-  if (role && ROLE_CATEGORY[role]) return ROLE_CATEGORY[role];
-
-  // A2A agent cards split into Personal vs SMB by their tags.
-  if (mt === "application/a2a-agent-card+json") {
-    if (tags.includes("personal-agent") || tags.includes("email-identity")) return "personal";
-    if (tags.includes("smb")) return "smb";
-  }
-  return null;
-}
 
 type Row = {
   record: IndexCatalogEntry;

@@ -38,6 +38,24 @@ export default function PrivacyPage() {
             never measured. If you decline, nothing is loaded. You can change your choice at any time via
             &ldquo;Cookie settings&rdquo; in the footer.
           </p>
+          {process.env.NEXT_PUBLIC_POSTHOG_KEY && (
+            <>
+              <p className="mt-3">
+                Accepting analytics also loads PostHog, which counts page views and clicks and records
+                sessions (how pages are scrolled and clicked) with every piece of text and every form input
+                masked, so neither what the page shows nor what you type is captured. Under the same rules as
+                above it never receives the query string of a page or link, or an email address, and never
+                runs on sign-in, password-reset and verification pages. It does not link your activity to
+                your account.
+              </p>
+              <p className="mt-3">
+                Separately, the index&apos;s API counts sign-ups, account verifications and entry
+                registrations, verifications and deletions in PostHog. These counts carry no personal data (no
+                email address, IP address, account or entry identifier) and are not linked to you or your
+                browser.
+              </p>
+            </>
+          )}
         </section>
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Contact</h2>

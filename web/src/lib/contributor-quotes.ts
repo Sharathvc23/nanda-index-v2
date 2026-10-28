@@ -58,6 +58,10 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
       "The Neuro SAN framework at Cognizant enables networks of specialized AI agents to collaborate and solve complex enterprise problems. NandaIndex complements this vision by providing an open discovery and resolution layer, allowing agents built on different frameworks and platforms to find and collaborate with one another across organizational boundaries.",
     attribution: "Babak Hodjat, CTO, Cognizant",
     logo: CONTRIBUTOR_LOGOS["Cognizant"],
+    post: {
+      title: "The Agentic Web Needs Both a Phone Book and Builder Tools",
+      href: "https://www.cognizant.com/us/en/ai-lab/blog/building-agentic-web-nandaindex-neuro-san",
+    },
   },
   {
     text:

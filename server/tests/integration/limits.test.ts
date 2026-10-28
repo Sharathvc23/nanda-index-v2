@@ -125,26 +125,19 @@ describe('Public limits, reserved ids and unverified trust data', () => {
       await seedOrg('lim-a');
       await seedOrg('lim-b');
       await seedOrg('lim-c');
-      const orgIdsOf = (body: unknown) => (body as Array<{ extensions: Record<string, { orgId: string }> }>)
+      // Other suites add and remove entries in parallel, so an offset read from
+      // one listing can be stale by the next request. Dating these three before
+      // anything another suite creates pins them to the head of the index.
+      await getSql()`
+        UPDATE organizations
+        SET created_at = TIMESTAMPTZ '2000-01-01' + (CASE org_id WHEN 'lim-a' THEN 1 WHEN 'lim-b' THEN 2 ELSE 3 END) * INTERVAL '1 second'
+        WHERE org_id IN ('lim-a', 'lim-b', 'lim-c')
+      `;
+
+      const page = await fastify.inject({ method: 'GET', url: '/api/v1/index?limit=2&offset=1' });
+      const ids = (page.json() as Array<{ extensions: Record<string, { orgId: string }> }>)
         .map((e) => e.extensions['org.projectnanda']!.orgId);
-
-      const listAll = async () =>
-        orgIdsOf((await fastify.inject({ method: 'GET', url: '/api/v1/index?limit=500' })).json());
-
-      // Other suites add and remove entries in parallel, which shifts every
-      // offset; compare only against a listing that held still around the page.
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const before = await listAll();
-        const offset = before.indexOf('lim-b');
-        expect(offset).toBeGreaterThanOrEqual(0);
-        const page = await fastify.inject({ method: 'GET', url: `/api/v1/index?limit=2&offset=${offset}` });
-        const after = await listAll();
-        if (after.join() !== before.join()) continue;
-
-        expect(orgIdsOf(page.json())).toEqual(['lim-b', 'lim-c']);
-        return;
-      }
-      throw new Error('the index kept changing under the test; no stable listing to compare against');
+      expect(ids).toEqual(['lim-b', 'lim-c']);
     });
 
     it.each(['limit=0', 'limit=501', 'offset=-1', 'limit=abc'])('rejects %s', async (qs) => {

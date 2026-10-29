@@ -17,7 +17,7 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
     text:
       "Agents built by small businesses and individuals will soon outnumber enterprise agents, and most of them will never own a discovery endpoint. A combination of AI Catalog, ARD, and the thin resolution layer of NandaIndex will allow every agent to be found.",
     attribution: "Sam Sharaf and Junjie Bu, Google",
-    logo: CONTRIBUTOR_LOGOS["Google"],
+    logo: null,
   },
   {
     text:

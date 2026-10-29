@@ -45,6 +45,12 @@ export const CONTRIBUTOR_QUOTES: readonly ContributorQuote[] = [
   },
   {
     text:
+      "The Internet of AI Agents will require the same fundamental qualities that made the internet successful: open interoperability, distributed infrastructure, and resilient communication across independent networks. Akamai has been exploring federated agent discovery, dynamic resolution, and real-world multi-agent deployment. NandaIndex represents a solid proposal toward connecting these independent agent ecosystems, while distributed cloud infrastructure provides the foundation to run them securely and at scale.",
+    attribution: "Vinay Kanitkar, Ph.D, Vice President Cloud Technology Architecture, Akamai Technologies",
+    logo: null,
+  },
+  {
+    text:
       "Widespread adoption of AI agents – particularly as they become embedded in new devices and interfaces – will generate additional network traffic and create new connectivity demands. Mobile operators are working to address these challenges and will need interoperable, open solutions that can scale across networks. Just as importantly, trust and security must be built in from the outset, including reliable ways to verify an agent’s identity and permissions, safeguard personal data and protect consumers from fraud or misuse.",
     attribution: "Louis Powell, Director of AI Initiatives, GSMA",
     logo: CONTRIBUTOR_LOGOS["GSMA"],

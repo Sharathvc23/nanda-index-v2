@@ -8,7 +8,9 @@
 // LTTS's logo was supplied and approved with its quote.
 // Nebius's logo is from https://nebius.com/logo.svg
 // PayPal's logo is from https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg
+// Google's logo is from https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png
 export const CONTRIBUTOR_LOGOS = {
+  "Google": { name: "Google", src: "/contributors/logos/google.png", width: 544, height: 184 },
   "Cisco": { name: "Cisco", src: "/contributors/logos/cisco.png", width: 272, height: 148 },
   "Project NANDA": { name: "Project NANDA", src: "/contributors/logos/project-nanda.png", width: 723, height: 276 },
   "GSMA": { name: "GSMA", src: "/contributors/logos/gsma.png", width: 738, height: 240 },

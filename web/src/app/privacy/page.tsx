@@ -1,6 +1,13 @@
 import { PageShell } from "@/components/PageShell";
+import { DEFAULT_POSTHOG_HOST } from "@/lib/posthogHosts";
 
 export const metadata = { title: "Privacy - NANDA Index" };
+
+const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+const posthogRegion = new URL(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST).hostname.startsWith("eu.")
+  ? "the EU"
+  : "the US";
 
 // Draft wording for owner review. Keep it factual: it describes what this
 // deployment collects and why, and nothing it does not do.
@@ -32,21 +39,29 @@ export default function PrivacyPage() {
         </section>
         <section>
           <h2 className="mb-2 font-display text-base font-semibold text-ink-strong">Analytics</h2>
-          <p>
-            If you accept analytics, the site loads Google Analytics to count page views. It receives the
-            page path (never the query string), and sign-in, password-reset and verification pages are
-            never measured. If you decline, nothing is loaded. You can change your choice at any time via
-            &ldquo;Cookie settings&rdquo; in the footer.
-          </p>
-          {process.env.NEXT_PUBLIC_POSTHOG_KEY && (
+          {!gaId && !posthogKey && <p>This site currently loads no analytics.</p>}
+          {(gaId || posthogKey) && (
+            <p>
+              Analytics load only if you accept them. They receive the page path (never the query string),
+              and sign-in, password-reset and verification pages are never measured. If you decline,
+              nothing is loaded. You can change your choice at any time via &ldquo;Cookie settings&rdquo; in
+              the footer.
+            </p>
+          )}
+          {gaId && <p className="mt-3">Google Analytics counts page views.</p>}
+          {posthogKey && (
             <>
               <p className="mt-3">
-                Accepting analytics also loads PostHog, which counts page views and clicks and records
-                sessions (how pages are scrolled and clicked) with every piece of text and every form input
-                masked, so neither what the page shows nor what you type is captured. Under the same rules as
-                above it never receives the query string of a page or link, or an email address, and never
-                runs on sign-in, password-reset and verification pages. It does not link your activity to
-                your account.
+                PostHog counts page views and clicks and records sessions (how pages are scrolled and
+                clicked) with every piece of text and every form input masked, so neither what the page
+                shows nor what you type is captured. It never receives the query string of a page or link,
+                or an email address, and does not link your activity to your account.
+              </p>
+              <p className="mt-3">
+                To tell visits apart, PostHog keeps a random identifier in a cookie and in your
+                browser&apos;s local storage. Like any website it receives your IP address, which it uses
+                to estimate an approximate location (country and city). PostHog stores this data in{" "}
+                {posthogRegion}.
               </p>
               <p className="mt-3">
                 Separately, the index&apos;s API counts sign-ups, account verifications and entry

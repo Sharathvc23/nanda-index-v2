@@ -127,6 +127,14 @@ export default function ContributorsPage() {
       </nav>
       <div className="max-w-3xl space-y-12">
         <div id="community-perspectives" className="scroll-mt-24">
+          <Image
+            src="/contributors/contributor-logos-tab-11.png"
+            alt="Contributor logos: Google, Cisco, Akamai, GSMA, Project NANDA, Cognizant, Commerce, Ericsson, HCLTech, Haven, Hexaware, Inkbox, Kyndryl, Maritime, Mitsubishi Electric, Nasiko, Nutanix, Ora, PayPal, TCS, TinyFish, WorkOS, and MIT Media Lab."
+            width={874}
+            height={602}
+            sizes="(min-width: 832px) 768px, calc(100vw - 64px)"
+            className="mb-8 h-auto w-full bg-white"
+          />
           <div className="space-y-8">
             {CONTRIBUTOR_QUOTES.map(({ text, attribution, logo, post }) => (
               <figure key={attribution} className="grid gap-x-6 sm:grid-cols-[8rem_minmax(0,1fr)]">

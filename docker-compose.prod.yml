@@ -46,6 +46,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@nandaindex.org}
       FRONTEND_URL: ${FRONTEND_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
+      ORG_RECOVERY_RATE_LIMIT_MAX: ${ORG_RECOVERY_RATE_LIMIT_MAX:-30}
       COOKIE_SECRET: ${COOKIE_SECRET}
       # Caddy is the one proxy in front: trust its X-Forwarded-For so per-IP rate
       # limits and login lockout apply per visitor, not to Caddy's address. Safe only because this

@@ -1,6 +1,23 @@
 import { Resend } from 'resend';
 import { buildConfig } from '../config/index.js';
 
+/** A code, not an action link: only the authenticated requesting account can use it. */
+export async function sendOrgRecoveryEmail(to: string, token: string, orgId: string, claimantEmail: string): Promise<void> {
+  const config = buildConfig();
+  if (config.email.smtpUrl === 'log') {
+    console.log(`[email] recovery code for org "${orgId}", account "${claimantEmail}" → ${token}`);
+    return;
+  }
+  const { error } = await new Resend(config.email.smtpUrl).emails.send({
+    from: config.email.fromAddress, to,
+    subject: `Recover your NANDA Index entry ${orgId}`,
+    text: `Account ${claimantEmail} requested administrator access to your personal entry ${orgId}.\n\n`
+      + `If you made this request, submit this code from the same signed-in account:\n\n${token}\n\n`
+      + 'The code expires in 15 minutes and can be used once. Do not share it. If you did not request recovery, ignore this email.',
+  });
+  if (error) throw new Error(`Resend error: ${error.message}`);
+}
+
 export async function sendVerificationEmail(
   to: string,
   token: string,

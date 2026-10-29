@@ -16,6 +16,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAccountVerificationRoutes } from './routes/account-verification.js';
 import { registerIndexRecordRoutes } from './routes/index-records.js';
 import { registerOrgRoutes } from './routes/orgs.js';
+import { registerOrgRecoveryRoute } from './routes/org-recovery.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerAvailabilityRoute } from './routes/availability.js';
 import { registerMeRoute } from './routes/me.js';
@@ -75,6 +76,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerAccountVerificationRoutes(fastify);
   await registerIndexRecordRoutes(fastify);
   await registerOrgRoutes(fastify);
+  await registerOrgRecoveryRoute(fastify);
   await registerAdminRoutes(fastify);
   await registerAvailabilityRoute(fastify);
   await registerMeRoute(fastify);

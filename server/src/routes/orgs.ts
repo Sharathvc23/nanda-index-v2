@@ -318,6 +318,7 @@ function requireOrgRole(level: 'member' | 'admin') {
  *   GET    /api/v1/orgs/:org_id                  — read own org              (member)
  *   POST   /api/v1/orgs/:org_id/domain-challenge — issue a DNS TXT challenge (admin)
  *   POST   /api/v1/orgs/:org_id/verify-domain    — check DNS, activate org   (admin)
+ *   Recovery is registered separately in org-recovery.ts (DNS or personal email).
  *   PUT    /api/v1/orgs/:org_id                  — update index record       (admin)
  *   DELETE /api/v1/orgs/:org_id/suspend          — suspend org               (admin)
  *   POST   /api/v1/orgs/:org_id/reactivate       — reactivate suspended      (admin)

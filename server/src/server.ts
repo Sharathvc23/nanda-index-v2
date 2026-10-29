@@ -6,6 +6,7 @@ import { registerHelmet } from './plugins/helmet.js';
 import { registerCors } from './plugins/cors.js';
 import { registerRateLimit } from './plugins/rateLimit.js';
 import { registerDb } from './plugins/db.js';
+import { registerAnalytics } from './plugins/analytics.js';
 import { registerSwagger } from './plugins/swagger.js';
 import { registerCookiePlugin } from './plugins/cookie.js';
 import { registerJwtPlugin } from './plugins/jwt.js';
@@ -61,6 +62,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await registerCors(fastify);
   await registerRateLimit(fastify);
   await registerDb(fastify);
+  await registerAnalytics(fastify);
   await registerCookiePlugin(fastify);
   await registerJwtPlugin(fastify);
   await registerOAuthPlugin(fastify);

@@ -62,6 +62,7 @@ export async function registerAccountVerificationRoutes(fastify: FastifyInstance
         detail: 'verification link is invalid or expired; request a new one from your dashboard',
       });
     }
+    fastify.analytics.capture('account_verified');
     return reply.send({ ok: true });
   });
 

@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { isPrivatePath } from "@/lib/analyticsPrivacy";
 import { onAnalyticsConsentChange, useAnalyticsConsent } from "@/lib/consent";
 
 /**
@@ -14,12 +15,6 @@ import { onAnalyticsConsentChange, useAnalyticsConsent } from "@/lib/consent";
  * Google with the page view. Here GA only ever sees origin + path, and pages
  * that carry secrets in their URL don't load it at all.
  */
-
-const PRIVATE_PATH_PREFIXES = ["/reset-password", "/auth/", "/verify-email", "/verify-account"];
-
-function isPrivatePath(pathname: string): boolean {
-  return PRIVATE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
 
 type Gtag = (...args: unknown[]) => void;
 

@@ -1,3 +1,5 @@
+import { availableParallelism } from 'node:os';
+
 /**
  * Reads a required env var.
  * Prints FATAL to stderr and exits with code 1 if the variable is
@@ -75,6 +77,12 @@ export interface AuthConfig {
   readonly lockoutMinutes: number;
   /** Lifetime of a password-reset token. */
   readonly resetTokenTtlMinutes: number;
+  /**
+   * Password hashes allowed to run at once (see lib/password.ts). Defaults to
+   * one less than the CPU count, leaving a core for the event loop. Set it
+   * under a container CPU cap, which os.availableParallelism() cannot see.
+   */
+  readonly maxConcurrentHashes: number;
 }
 
 export interface ClaimsConfig {
@@ -127,6 +135,13 @@ export interface LlmEnrichmentConfig {
   readonly timeoutMs: number;
 }
 
+export interface AnalyticsConfig {
+  /** PostHog project API key; undefined = server-side analytics disabled. */
+  readonly posthogApiKey: string | undefined;
+  /** PostHog ingestion host (US Cloud by default). */
+  readonly posthogHost: string;
+}
+
 export interface Config {
   readonly port: number;
   readonly nodeEnv: string;
@@ -145,6 +160,12 @@ export interface Config {
    *  (1 behind Caddy in production). 0 = reached directly; the header is then
    *  ignored, since any client could forge it to dodge per-IP rate limits. */
   readonly trustProxyHops: number;
+  /** How long the public index total (X-Total-Count) and ARD facet counts
+   *  are reused before being counted again. They read every listed entry
+   *  however small the page, so their cost grows with the index. Moderation
+   *  and new entries show in them only after this long. 0 = count on every
+   *  request. */
+  readonly indexStatsCacheSeconds: number;
   readonly frontendUrl: string;
   readonly signing: SigningConfig;
   /** Public base URL this API is reachable at — used to build absolute
@@ -153,6 +174,7 @@ export interface Config {
   readonly federation: FederationConfig;
   readonly outbound: OutboundConfig;
   readonly llmEnrichment: LlmEnrichmentConfig;
+  readonly analytics: AnalyticsConfig;
 }
 
 /**
@@ -229,6 +251,10 @@ export function buildConfig(): Config {
       resetTokenTtlMinutes: parsePositiveInt(
         'AUTH_RESET_TOKEN_TTL_MINUTES', optionalEnv('AUTH_RESET_TOKEN_TTL_MINUTES', '60'),
       ),
+      maxConcurrentHashes: parsePositiveInt(
+        'AUTH_MAX_CONCURRENT_HASHES',
+        optionalEnv('AUTH_MAX_CONCURRENT_HASHES', String(Math.max(1, availableParallelism() - 1))),
+      ),
     },
     claims: {
       recoveryRateLimitMax: parsePositiveInt(
@@ -252,6 +278,9 @@ export function buildConfig(): Config {
     },
     adminEmails: parseAdminEmails(optionalEnv('ADMIN_EMAILS', '')),
     trustProxyHops: parseNonNegativeInt('TRUST_PROXY_HOPS', optionalEnv('TRUST_PROXY_HOPS', '0')),
+    indexStatsCacheSeconds: parseNonNegativeInt(
+      'INDEX_STATS_CACHE_SECONDS', optionalEnv('INDEX_STATS_CACHE_SECONDS', '60'),
+    ),
     frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3000'),
     signing: {
       privateKey: rawSigningKey ? rawSigningKey.replace(/\\n/g, '\n') : undefined,
@@ -278,6 +307,10 @@ export function buildConfig(): Config {
       timeoutMs: parsePositiveInt(
         'OPENAI_ENRICHMENT_TIMEOUT_MS', optionalEnv('OPENAI_ENRICHMENT_TIMEOUT_MS', '8000'),
       ),
+    },
+    analytics: {
+      posthogApiKey: process.env['POSTHOG_API_KEY'] || undefined,
+      posthogHost: optionalEnv('POSTHOG_HOST', 'https://us.i.posthog.com'),
     },
   };
 }

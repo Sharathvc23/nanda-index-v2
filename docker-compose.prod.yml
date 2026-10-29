@@ -57,12 +57,19 @@ services:
       # Write-time representative-query enrichment for search; skipped when unset.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_ENRICHMENT_MODEL: ${OPENAI_ENRICHMENT_MODEL:-gpt-4o-mini}
+      # PostHog: anonymous account/entry lifecycle counts (server/src/services/analytics.ts).
+      # Same project key as the web app; off when unset.
+      POSTHOG_API_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
       # Index operators (comma-separated, Google/GitHub sign-in only): may
       # moderate entries via /api/v1/admin/* and register reserved org_ids.
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # Per-IP limits on public reads; agentic/ARD search fan out, so tighter.
       PUBLIC_RATE_LIMIT_MAX: ${PUBLIC_RATE_LIMIT_MAX:-120}
       SEARCH_RATE_LIMIT_MAX: ${SEARCH_RATE_LIMIT_MAX:-30}
+      # Seconds the index total (X-Total-Count) and ARD facet counts are reused
+      # before recounting every listed entry; 0 = recount on every request.
+      INDEX_STATS_CACHE_SECONDS: ${INDEX_STATS_CACHE_SECONDS:-60}
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +82,8 @@ services:
       args:
         NEXT_PUBLIC_NANDA_INDEX_API_URL: ${NEXT_PUBLIC_NANDA_INDEX_API_URL}
         NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
     environment:
       PORT: 3000
     depends_on:

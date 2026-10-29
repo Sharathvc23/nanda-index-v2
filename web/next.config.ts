@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { DEFAULT_POSTHOG_HOST, posthogHosts } from "./src/lib/posthogHosts";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -58,10 +59,30 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()" },
 ];
 
+// PostHog (components/PostHogAnalytics.tsx, after consent) is reached through
+// this site at /ingest rather than directly: the CSP needs no PostHog origins,
+// and blockers that drop requests to posthog.com don't drop these. Only set up
+// when a key is configured, so the site isn't a PostHog proxy otherwise.
+function posthogRewrites() {
+  if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return [];
+  const { api, assets } = posthogHosts(process.env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST);
+  return [
+    { source: "/ingest/static/:path*", destination: `${assets}/static/:path*` },
+    { source: "/ingest/array/:path*", destination: `${assets}/array/:path*` },
+    { source: "/ingest/:path*", destination: `${api}/:path*` },
+  ];
+}
+
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // PostHog's endpoints end in a slash (/e/, /flags/); Next's default
+  // redirect to the slash-less URL would break them behind the rewrite.
+  skipTrailingSlashRedirect: !!process.env.NEXT_PUBLIC_POSTHOG_KEY,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  async rewrites() {
+    return posthogRewrites();
   },
 };
 

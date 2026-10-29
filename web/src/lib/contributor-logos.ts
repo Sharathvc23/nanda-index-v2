@@ -30,7 +30,7 @@ export const CONTRIBUTOR_LOGOS = {
   "WorkOS": { name: "WorkOS", src: "/contributors/logos/workos.png", width: 374, height: 225 },
   "MIT Media Lab": { name: "MIT Media Lab", src: "/contributors/logos/mit-media-lab.png", width: 284, height: 177 },
   "PayPal": { name: "PayPal", src: "/contributors/logos/paypal.svg", width: 135, height: 48 },
-  "Akamai Cloud": { name: "Akamai Cloud", src: "/contributors/logos/akamai-cloud.png", width: 1688, height: 932 },
+  "Akamai Cloud": { name: "Akamai Cloud", src: "/contributors/logos/akamai-cloud-supplied.png", width: 870, height: 480 },
   "Wipro": { name: "Wipro", src: "/contributors/logos/wipro.svg", width: 393.35, height: 157.54 },
   "Wand AI": { name: "Wand AI", src: "/contributors/logos/wand-ai.svg", width: 3120, height: 868 },
   "Suki": { name: "Suki", src: "/contributors/logos/suki.svg", width: 73, height: 35 },

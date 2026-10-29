@@ -436,6 +436,11 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
 
     await insertMembership(user.userId, org.orgId, 'admin');
     await sendVerificationEmail(body.contact_email, verifyToken, body.org_id);
+    fastify.analytics.capture('entry_registered', {
+      hosting_path: path,
+      has_domain: org.domain !== null,
+      media_type: org.mediaType,
+    });
 
     return reply.code(201).send(toIndexRecord(org));
   });
@@ -574,6 +579,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     if (!updated) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
+    fastify.analytics.capture('entry_domain_verified');
 
     return reply.send(toIndexRecord(updated));
   });
@@ -797,6 +803,7 @@ export async function registerOrgRoutes(fastify: FastifyInstance): Promise<void>
     if (!deleted) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: `org "${request.params.org_id}" not found` });
     }
+    fastify.analytics.capture('entry_deleted');
 
     return reply.code(204).send();
   });

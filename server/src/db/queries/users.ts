@@ -89,6 +89,15 @@ export async function upsertUser(params: UpsertUserParams): Promise<User> {
 }
 
 /**
+ * True when `upsertUser` inserted the row rather than updating an existing
+ * one: on insert both timestamps default to the same NOW(), while the
+ * ON CONFLICT update moves updated_at to a later transaction's NOW().
+ */
+export function wasJustCreated(user: User): boolean {
+  return user.createdAt.getTime() === user.updatedAt.getTime();
+}
+
+/**
  * Finds a user by email address (used for password login).
  * Returns null if not found.
  */

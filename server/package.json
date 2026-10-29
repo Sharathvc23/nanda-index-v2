@@ -33,6 +33,7 @@
     "nodemailer": "^8.0.10",
     "openai": "^6.48.0",
     "postgres": "^3.4.4",
+    "posthog-node": "^5.57.2",
     "resend": "^6.12.4",
     "undici": "^7.30.1"
   },

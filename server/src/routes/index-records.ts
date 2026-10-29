@@ -146,6 +146,7 @@ export async function registerIndexRecordRoutes(fastify: FastifyInstance): Promi
     if (!org) {
       return reply.code(404).send({ error: 'NOT_FOUND', detail: 'verification token not found or already used' });
     }
+    fastify.analytics.capture('entry_email_verified', { has_domain: org.domain !== null });
     return reply.send(toIndexRecord(org));
   });
 }

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
-  completeOrgRecovery, discardRecoveryChallenge, prepareOrgRecovery,
+  completeOrgRecovery, discardRecoveryChallenge, INVALID_PROOF_DETAIL, prepareOrgRecovery,
   RecoveryError, recoveryTokenHash,
 } from '../db/queries/orgRecovery.js';
 import { toIndexRecord } from '../db/queries/organizations.js';
@@ -66,7 +66,7 @@ export async function registerOrgRecoveryRoute(fastify: FastifyInstance): Promis
             return reply.code(202).send({ status: 'email_sent', method: 'email', expires_at: challenge.expiresAt.toISOString() });
           }
           if (!timingSafeEqual(Buffer.from(recoveryTokenHash(token), 'hex'), Buffer.from(challenge.tokenHash, 'hex'))) {
-            return reply.code(400).send({ error: 'INVALID_RECOVERY_PROOF', detail: 'invalid recovery code' });
+            return reply.code(400).send({ error: 'INVALID_RECOVERY_PROOF', detail: INVALID_PROOF_DETAIL });
           }
         } else {
           const recordName = `_nanda-recovery.${challenge.subject}`;

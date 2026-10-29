@@ -6,6 +6,12 @@ import { NANDA_EXTENSION } from '../../lib/entryProfile.js';
 import { SINGLE_RESOURCE_MEDIA_TYPES } from '../../lib/mediaTypes.js';
 import { CHALLENGE_TTL_MS } from '../../services/domainVerification.js';
 
+const EMAIL_PROOF_TTL_MS = 15 * 60 * 1000;
+/** Live recovery emails one address may have outstanding, across all entries and accounts. */
+const MAX_LIVE_EMAILS_PER_ADDRESS = 3;
+/** One message for a wrong code and a missing proof, so neither hints at admin state. */
+export const INVALID_PROOF_DETAIL = 'invalid or expired recovery code; request a new one';
+
 export interface RecoveryChallenge {
   id: string;
   organizationId: string;
@@ -70,18 +76,30 @@ export async function prepareOrgRecovery(orgId: string, userId: string, allowIss
         AND identifier = ${org.identifier} AND expires_at > clock_timestamp()
     `;
     if (existing) return { org, challenge: existing, emailToken: null, created: false };
-    if (!allowIssue) throw new RecoveryError(400, 'INVALID_RECOVERY_PROOF', 'request a new recovery challenge');
+    if (!allowIssue) throw new RecoveryError(400, 'INVALID_RECOVERY_PROOF', INVALID_PROOF_DETAIL);
 
+    let administered = false;
     if (identity.method === 'email') {
-      // Serialize issuance per org to limit mail even across different accounts.
-      const [recent] = await tx`
-        SELECT 1 FROM org_recovery_challenges WHERE organization_id = ${org.id}
-          AND method = 'email' AND created_at > clock_timestamp() - INTERVAL '1 minute' LIMIT 1
+      // Cap mail per recipient, not per entry: no number of accounts can flood
+      // one inbox, and one account cannot lock the owner out of an entry. The
+      // address lock serializes the count across entries sharing the address.
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${`nanda-recovery-mail:${identity.subject}`}))`;
+      const [mail] = await tx<{ live: number }[]>`
+        SELECT COUNT(*)::int AS live FROM org_recovery_challenges
+        WHERE method = 'email' AND subject = ${identity.subject} AND expires_at > clock_timestamp()
       `;
-      if (recent) throw new RecoveryError(429, 'RECOVERY_COOLDOWN', 'a recovery email was sent recently; try again in one minute');
+      if ((mail?.live ?? 0) >= MAX_LIVE_EMAILS_PER_ADDRESS) {
+        throw new RecoveryError(429, 'RECOVERY_COOLDOWN', 'too many recovery emails were requested for this address; try again in 15 minutes');
+      }
+      // The proof is still issued so limits and errors behave identically,
+      // but an administered entry's owner is never mailed on a stranger's behalf.
+      const [admin] = await tx`
+        SELECT 1 FROM org_memberships WHERE org_id = ${org.orgId} AND role = 'admin' LIMIT 1
+      `;
+      administered = admin !== undefined;
     }
     const token = randomBytes(32).toString('hex');
-    const ttlMs = identity.method === 'dns' ? CHALLENGE_TTL_MS : 15 * 60 * 1000;
+    const ttlMs = identity.method === 'dns' ? CHALLENGE_TTL_MS : EMAIL_PROOF_TTL_MS;
     const [challenge] = await tx<RecoveryChallenge[]>`
       INSERT INTO org_recovery_challenges
         (organization_id, user_id, method, subject, identifier, token_hash, dns_token, expires_at)
@@ -94,7 +112,8 @@ export async function prepareOrgRecovery(orgId: string, userId: string, allowIss
         dns_token = EXCLUDED.dns_token, expires_at = EXCLUDED.expires_at, created_at = clock_timestamp()
       RETURNING *
     `;
-    return { org, challenge: challenge!, emailToken: identity.method === 'email' ? token : null, created: true };
+    const emailToken = identity.method === 'email' && !administered ? token : null;
+    return { org, challenge: challenge!, emailToken, created: true };
   });
 }
 

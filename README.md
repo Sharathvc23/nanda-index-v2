@@ -315,7 +315,7 @@ Identifiers follow ARD's `urn:air:<publisher-FQDN>:<namespace...>:<short-name>`.
 
 ### Recovering an entry with no administrator
 
-Migration `018_org_recovery.sql` adds dedicated recovery challenges. Apply the
+Migration `019_org_recovery.sql` adds dedicated recovery challenges. Apply the
 server migrations before deploying the updated API. Any verified account may
 start recovery; completion requires fresh ownership proof tied to that same
 account. An account's verified login email alone does not prove ownership of an
@@ -353,9 +353,12 @@ The grant and consumption of all competing recovery proofs happen in one locked
 database transaction. Expired, consumed, or identity-invalidated proofs cannot
 grant access. Changing an identity away and back also invalidates its old proofs.
 Requests retain the per-IP org-write limit and add a per-account hourly limit
-(`ORG_RECOVERY_RATE_LIMIT_MAX`, default 30). Email issuance also has a one-minute
-per-entry cooldown across accounts. HTTP limits are per API process; the email
-cooldown and proof lifecycle are coordinated in PostgreSQL.
+(`ORG_RECOVERY_RATE_LIMIT_MAX`, default 30). Each address can have at most three
+live recovery emails at once, across all entries and accounts (`429` beyond that,
+for up to 15 minutes). If the entry already has an administrator, no email is sent,
+but the response is the same `202`, so the request reveals nothing about admin
+state. HTTP limits are per API process; the email cap and proof lifecycle are
+coordinated in PostgreSQL.
 
 ### Resolution Example
 

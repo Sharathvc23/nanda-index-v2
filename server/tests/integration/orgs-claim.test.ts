@@ -290,7 +290,6 @@ describe('Recovery of an orphaned domain or personal entry', () => {
   it('does not let a second account use an email code issued to the first', async () => {
     const id = 'recovery-email-two'; await seed(id, { personal: true });
     const first = await emailCode(id);
-    await getSql()`UPDATE org_recovery_challenges SET created_at = NOW() - INTERVAL '2 minutes'`;
     const second = await emailCode(id, otherToken);
     expect(second).not.toBe(first);
     expect((await claim(id, otherToken, first)).statusCode).toBe(400);
@@ -299,12 +298,58 @@ describe('Recovery of an orphaned domain or personal entry', () => {
     expect(await challenges(id)).toHaveLength(0);
   });
 
-  it('rate limits email delivery across accounts without invalidating the first challenge', async () => {
-    const id = 'recovery-mail-cooldown'; await seed(id, { personal: true });
+  async function extraAccount(name: string) {
+    const user = await upsertUser({ email: `recovery-${name}@example.com`, displayName: null,
+      avatarUrl: null, provider: 'github', providerId: `recovery-${name}` });
+    return app.jwt.sign({ userId: user.id, email: user.email, displayName: null, tokenVersion: user.tokenVersion });
+  }
+
+  it('caps live recovery emails per address across accounts without invalidating earlier codes', async () => {
+    const id = 'recovery-mail-cap'; await seed(id, { personal: true });
     const code = await emailCode(id);
-    expect((await claim(id, otherToken)).statusCode).toBe(429);
-    expect(sendRecoveryMock).toHaveBeenCalledTimes(1);
+    await emailCode(id, otherToken);
+    await emailCode(id, await extraAccount('third'));
+    const capped = await claim(id, await extraAccount('fourth'));
+    expect(capped.statusCode).toBe(429);
+    expect(capped.json().error).toBe('RECOVERY_COOLDOWN');
+    expect(sendRecoveryMock).toHaveBeenCalledTimes(3);
     expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+  });
+
+  it('does not let one account block the owner from requesting a code', async () => {
+    const id = 'recovery-mail-no-block'; await seed(id, { personal: true });
+    await emailCode(id, otherToken);
+    const code = await emailCode(id);
+    expect((await claim(id, ownerToken, code)).statusCode).toBe(201);
+  });
+
+  it('mails no one for an administered personal entry and answers exactly as for an orphan', async () => {
+    const sql = getSql();
+    await seed('recovery-mail-admin', { personal: true }); await seed('recovery-mail-orphan', { personal: true });
+    await sql`INSERT INTO org_memberships (user_id, org_id, role) VALUES (${otherId}, 'recovery-mail-admin', 'admin')`;
+    const administered = await claim('recovery-mail-admin');
+    const orphan = await claim('recovery-mail-orphan');
+    expect(administered.statusCode).toBe(202);
+    expect(Object.keys(administered.json()).sort()).toEqual(Object.keys(orphan.json()).sort());
+    expect(administered.json().status).toBe(orphan.json().status);
+    expect(sendRecoveryMock).toHaveBeenCalledTimes(1);
+    expect(sendRecoveryMock.mock.calls[0]![0]).toBe('recovery-mail-orphan@example.com');
+
+    const wrong = '0'.repeat(64);
+    const adminGuess = await claim('recovery-mail-admin', ownerToken, wrong);
+    const orphanGuess = await claim('recovery-mail-orphan', ownerToken, wrong);
+    expect(adminGuess.statusCode).toBe(400);
+    expect(adminGuess.json()).toEqual(orphanGuess.json());
+    expect(await admins('recovery-mail-admin')).toEqual([{ userId: otherId }]);
+  });
+
+  it('gives a wrong code and a code with no live proof the same answer', async () => {
+    const id = 'recovery-mail-oracle'; await seed(id, { personal: true });
+    const noProof = await claim(id, ownerToken, '1'.repeat(64));
+    await emailCode(id);
+    const wrongCode = await claim(id, ownerToken, '1'.repeat(64));
+    expect(noProof.statusCode).toBe(400);
+    expect(noProof.json()).toEqual(wrongCode.json());
   });
 
   it('allows a fresh email attempt after delivery fails', async () => {

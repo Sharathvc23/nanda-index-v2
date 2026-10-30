@@ -22,40 +22,70 @@ export default function HomePage() {
           capabilities across boundaries.
         </p>
 
-        <p>
-          NandaIndex is an AI Catalog-formatted federation layer that maps a
-          stable resource identifier to the appropriate discovery object, whether
-          an AI Catalog, a DNS-based service-discovery path, a gateway, a platform
-          registry, or a hosted agent card. It functions as a global switchboard:
-          it does not replace existing discovery systems but routes requesters to
-          them.
-        </p>
+        <section aria-labelledby="what-is-nandaindex" className="space-y-4 pt-4">
+          <h2 id="what-is-nandaindex" className="text-lg font-bold text-ink-strong">
+            What is NandaIndex?
+          </h2>
+          <p>
+            NandaIndex is an AI Catalog-formatted federation layer that maps a
+            stable resource identifier to the appropriate discovery object, whether
+            an AI Catalog, a DNS-based service-discovery path, a gateway, a platform
+            registry, or a hosted agent card. It functions as a global switchboard:
+            it does not replace existing discovery systems but routes requesters to
+            them.
+          </p>
+        </section>
 
-        <p>
-          For enterprises that publish AI Catalog at a well-known endpoint and
-          own the domain, direct resolution already works. NandaIndex is not in
-          the critical path. Small businesses can distribute runtime, agent card,
-          and domain across separate providers and still be resolved from one
-          resource identifier. NandaIndex enables identity-first discovery for
-          individuals, when the underlying account identity is verifiably bound
-          to the resolution record.
-        </p>
-        <p>
-          Several questions remain open, and we expect future work to address
-          them:
-        </p>
-        <ul className="list-disc space-y-2 pl-6">
-          <li>Refining resolution semantics and identity models.</li>
-          <li>Strengthening trust, verification, and policy mechanisms.</li>
-          <li>
-            Standardizing the interfaces between the resolution, discovery, and
-            infrastructure layers.
-          </li>
-          <li>
-            Supporting richer query routing and multi-hop resolution across
-            federated systems.
-          </li>
-        </ul>
+        <section aria-labelledby="supporting-enterprises" className="space-y-4 pt-4">
+          <h2 id="supporting-enterprises" className="text-lg font-bold text-ink-strong">
+            Supporting enterprises, small businesses, and individuals
+          </h2>
+          <p>
+            For enterprises that publish AI Catalog at a well-known endpoint and
+            own the domain, direct resolution already works. NandaIndex is not in
+            the critical path. Small businesses can distribute runtime, agent card,
+            and domain across separate providers and still be resolved from one
+            resource identifier. NandaIndex enables identity-first discovery for
+            individuals, when the underlying account identity is verifiably bound
+            to the resolution record.
+          </p>
+        </section>
+
+        <section aria-labelledby="open-agent-ecosystem" className="space-y-4 pt-4">
+          <h2 id="open-agent-ecosystem" className="text-lg font-bold text-ink-strong">
+            Complementing the open agent ecosystem
+          </h2>
+          <p>
+            NandaIndex works alongside existing open standards and protocols,
+            including AI Catalog, A2A, MCP, Poppy, and emerging payment protocols.
+            It provides a common resolution layer while existing systems continue
+            to handle agent discovery, communication, authentication, authorization,
+            and transactions. NandaIndex does not replace these systems or require
+            agents to use a common platform.
+          </p>
+        </section>
+
+        <section aria-labelledby="open-questions" className="space-y-4 pt-4">
+          <h2 id="open-questions" className="text-lg font-bold text-ink-strong">
+            Open questions and future work
+          </h2>
+          <p>
+            Several questions remain open, and we expect future work to address
+            them:
+          </p>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>Refining resolution semantics and identity models.</li>
+            <li>Strengthening trust, verification, and policy mechanisms.</li>
+            <li>
+              Standardizing the interfaces between the resolution, discovery, and
+              infrastructure layers.
+            </li>
+            <li>
+              Supporting richer query routing and multi-hop resolution across
+              federated systems.
+            </li>
+          </ul>
+        </section>
       </div>
       <div className="mt-10 flex flex-wrap gap-3">
         <a

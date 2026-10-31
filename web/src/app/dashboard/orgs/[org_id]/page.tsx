@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { formatTimestamp } from "@/lib/formatTimestamp";
 import { useRouter, useParams } from "next/navigation";
+import { OrgActionDialog, type OrgAction } from "@/components/OrgActionDialog";
 import { FieldLabel } from "@/components/FieldLabel";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -49,6 +50,10 @@ export default function OrgDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [action, setAction] = useState<OrgAction | null>(null);
+  const actionInFlight = useRef(false);
+  const actionSucceeded = useRef(false);
+  const actionFocusTarget = useRef<HTMLHeadingElement>(null);
 
   const [displayName, setDisplayName] = useState("");
   const [registryUrl, setRegistryUrl] = useState("");
@@ -91,6 +96,14 @@ export default function OrgDetailPage() {
   function fieldError(field: OrgFormField) {
     return fieldErrors[field] ? <p id={`${fid}-${field}-error`} role="alert" className="mt-1 text-xs text-rose-700">{fieldErrors[field]}</p> : null;
   }
+
+  useEffect(() => {
+    if (action === null && actionSucceeded.current) {
+      // The status change may remove the opener, so use a stable page target.
+      actionFocusTarget.current?.focus();
+      actionSucceeded.current = false;
+    }
+  }, [action]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,43 +175,57 @@ export default function OrgDetailPage() {
   }
 
   async function onSuspend() {
-    if (!confirm(`Suspend "${orgId}"? This will remove it from public index results.`)) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setError(null);
     setSuspending(true);
     try {
       const updated = await suspendOrg(orgId);
+      actionSucceeded.current = true;
       setOrg(updated);
+      setAction(null);
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setSuspending(false);
     }
   }
 
   async function onReactivate() {
-    if (!confirm(`Reactivate "${orgId}"? This will make it active and visible in the index again.`)) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setError(null);
     setReactivating(true);
     try {
       const updated = await reactivateOrg(orgId);
+      actionSucceeded.current = true;
       setOrg(updated);
+      setAction(null);
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setReactivating(false);
     }
   }
 
   async function onDelete() {
-    if (!confirm(`Permanently delete "${orgId}"? This cannot be undone.`)) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setError(null);
     setDeleting(true);
     try {
       await deleteOrg(orgId);
+      setAction(null);
       router.replace("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) setError(`${err.status}: ${err.message}`);
       else setError(`Unexpected error: ${String(err)}`);
     } finally {
+      actionInFlight.current = false;
       setDeleting(false);
     }
   }
@@ -392,19 +419,24 @@ export default function OrgDetailPage() {
           </div>
         )}
 
-        {error && (
+        {error && !action && (
           <div role="alert" className="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
         )}
+
+        {action && <OrgActionDialog action={action} orgId={orgId} domain={org.domain}
+          busy={suspending || reactivating || deleting} error={error}
+          onCancel={() => { if (!actionInFlight.current) { setAction(null); setError(null); } }}
+          onConfirm={action === "suspend" ? onSuspend : action === "reactivate" ? onReactivate : onDelete} />}
 
         <JsonPanel data={org} />
 
         <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 space-y-3">
-          <h3 className="text-sm font-semibold text-rose-800">Danger Zone</h3>
+          <h3 ref={actionFocusTarget} tabIndex={-1} className="text-sm font-semibold text-rose-800">Danger Zone</h3>
           {org.status === "suspended" ? (
             <div className="flex items-center justify-between">
               <p className="text-sm text-rose-700">This organization is suspended and hidden from the public index.</p>
               <button
-                onClick={onReactivate}
+                onClick={() => { setError(null); setAction("reactivate"); }}
                 disabled={reactivating}
                 className="ml-4 shrink-0 rounded-2xl border border-emerald-300 bg-white px-5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
               >
@@ -419,7 +451,7 @@ export default function OrgDetailPage() {
             <div className="flex items-center justify-between">
               <p className="text-sm text-rose-700">Suspending removes this org from public index results. You can reactivate it later.</p>
               <button
-                onClick={onSuspend}
+                onClick={() => { setError(null); setAction("suspend"); }}
                 disabled={suspending}
                 className="ml-4 shrink-0 rounded-2xl border border-rose-300 bg-white px-5 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
               >
@@ -430,7 +462,7 @@ export default function OrgDetailPage() {
           <div className="border-t border-rose-200 pt-3 flex items-center justify-between">
             <p className="text-sm text-rose-700">Permanently delete this organization and all its data. This cannot be undone.</p>
             <button
-              onClick={onDelete}
+              onClick={() => { setError(null); setAction("delete"); }}
               disabled={deleting}
               className="ml-4 shrink-0 rounded-2xl bg-rose-600 px-5 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
             >

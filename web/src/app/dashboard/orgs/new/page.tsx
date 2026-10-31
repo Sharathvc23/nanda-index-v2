@@ -7,6 +7,7 @@ import { RegistrationBoundary } from "@/components/RegistrationBoundary";
 import { FieldLabel } from "@/components/FieldLabel";
 import { cardManagement } from "@/lib/cardManagement";
 import { PageShell } from "@/components/PageShell";
+import { RUNTIME_PROVIDERS } from "@/lib/org-runtime-settings";
 import { ORG_FIELD_HELP } from "@/lib/org-field-help";
 import { ApiError, checkAvailability, createOrg, isAccountNotVerified } from "@/lib/nanda-api";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,6 @@ const TTL_OPTIONS = [
   { label: "7 days", value: "604800" },
 ];
 
-const RUNTIME_PROVIDERS = ["AWS", "Azure", "GCP", "Railway", "GoDaddy", "Vercel", "Other"];
 
 const PATH_LABEL: Record<HostingPath, string> = {
   registry: "Enterprise AI Catalog",
